@@ -319,187 +319,151 @@ function renderTeams() {
       btn => {
 
         btn.onclick =
-          async () => {
+  async () => {
 
-            const id =
-              btn.dataset.id;
+    // KIỂM TRA QUYỀN TRƯỚC KHI THAO TÁC
+    if (!requireAdmin()) {
+      return;
+    }
 
-            const action =
-              btn.dataset.action;
+    const id =
+      btn.dataset.id;
 
-            const round =
-              Number(
-                btn.dataset.round
-              );
+    const action =
+      btn.dataset.action;
 
+    const round =
+      Number(
+        btn.dataset.round
+      );
 
-            /* =================================
-               RESET THEO LẦN
-            ================================= */
+    if (
+      action === "reset"
+    ) {
 
-            if (
-              action ===
-              "reset"
-            ) {
+      const ok =
+        confirm(
+          `Bạn có chắc muốn reset đội này về Lần ${round}?`
+        );
 
-              const ok =
-                confirm(
-                  `Bạn có chắc muốn reset đội này về Lần ${round}?`
-                );
+      if (!ok) return;
 
-              if (!ok) return;
+      try {
 
+        await updateDoc(
+          doc(db, "teams", id),
+          {
+            currentRound: round,
+            currentWord: 0,
+            status: "playing",
+            locked: false,
 
-              /*
-                Reset trạng thái đội.
+            adminAction: "reset",
+            adminResetRound: round,
+            adminUnlockRound: null,
 
-                Game phía người chơi cần refresh
-                để đọc trạng thái mới.
-              */
+            adminActionAt: serverTimestamp(),
+            lastActive: serverTimestamp()
+          }
+        );
 
-              await updateDoc(
-                doc(
-                  db,
-                  "teams",
-                  id
-                ),
+        alert(
+          `Đã reset đội về Lần ${round}.`
+        );
 
-                {
+      } catch (error) {
 
-                  currentRound:
-                    round,
+        console.error(error);
 
-                  currentWord:
-                    0,
+        alert(
+          "Không có quyền thực hiện thao tác này."
+        );
 
-                  status:
-                    "playing",
+      }
 
-                  locked:
-                    false,
-
-                  adminAction:
-                    "reset",
-
-                  adminResetRound:
-                    round,
-
-                  adminUnlockRound:
-                    null,
-
-                  adminActionAt:
-                    serverTimestamp(),
-
-                  lastActive:
-                    serverTimestamp()
-
-                }
-
-              );
+    }
 
 
-              alert(
-                `Đã reset đội về Lần ${round}.`
-              );
+    else if (
+      action === "unlock"
+    ) {
 
-            }
+      const ok =
+        confirm(
+          `Mở khóa Lần ${round} cho đội này?`
+        );
 
+      if (!ok) return;
 
-            /* =================================
-               MỞ KHÓA THEO LẦN
-            ================================= */
+      try {
 
-            else if (
-              action ===
-              "unlock"
-            ) {
+        await updateDoc(
+          doc(db, "teams", id),
+          {
+            currentRound: round,
+            status: "playing",
+            locked: false,
 
-              const ok =
-                confirm(
-                  `Mở khóa Lần ${round} cho đội này?`
-                );
+            adminAction: "unlock",
+            adminUnlockRound: round,
+            adminResetRound: null,
 
-              if (!ok) return;
+            adminActionAt: serverTimestamp(),
+            lastActive: serverTimestamp()
+          }
+        );
 
+        alert(
+          `Đã mở khóa Lần ${round}.`
+        );
 
-              await updateDoc(
-                doc(
-                  db,
-                  "teams",
-                  id
-                ),
+      } catch (error) {
 
-                {
+        console.error(error);
 
-                  status:
-                    "playing",
+        alert(
+          "Không có quyền thực hiện thao tác này."
+        );
 
-                  locked:
-                    false,
+      }
 
-                  currentRound:
-                    round,
-
-                  adminAction:
-                    "unlock",
-
-                  adminUnlockRound:
-                    round,
-
-                  adminResetRound:
-                    null,
-
-                  adminActionAt:
-                    serverTimestamp(),
-
-                  lastActive:
-                    serverTimestamp()
-
-                }
-
-              );
+    }
 
 
-              alert(
-                `Đã mở khóa Lần ${round}.`
-              );
+    else if (
+      action === "delete"
+    ) {
 
-            }
+      const ok =
+        confirm(
+          "XÓA HOÀN TOÀN ĐỘI NÀY?\n\nĐội sẽ phải nhập lại tên để chơi từ đầu."
+        );
 
+      if (!ok) return;
 
-            /* =================================
-               XÓA ĐỘI
-            ================================= */
+      try {
 
-            else if (
-              action ===
-              "delete"
-            ) {
+        await deleteDoc(
+          doc(db, "teams", id)
+        );
 
-              const ok =
-                confirm(
-                  "XÓA HOÀN TOÀN ĐỘI NÀY?\n\nĐội sẽ phải nhập lại tên để chơi từ đầu."
-                );
+        alert(
+          "Đã xóa đội khỏi hệ thống."
+        );
 
-              if (!ok) return;
+      } catch (error) {
 
+        console.error(error);
 
-              await deleteDoc(
-                doc(
-                  db,
-                  "teams",
-                  id
-                )
-              );
+        alert(
+          "Không có quyền xóa đội này."
+        );
 
+      }
 
-              alert(
-                "Đã xóa đội khỏi hệ thống."
-              );
+    }
 
-            }
-
-          };
+  };
 
       }
 
@@ -512,4 +476,22 @@ function labelStatus(status) {
 }
 function escapeHtml(text) {
   return String(text).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;" }[c]));
+}
+function requireAdmin() {
+
+  const user =
+    auth.currentUser;
+
+  if (!isAdmin(user)) {
+
+    alert(
+      "Bạn chưa đăng nhập hoặc không có quyền BTC."
+    );
+
+    return false;
+
+  }
+
+  return true;
+
 }
