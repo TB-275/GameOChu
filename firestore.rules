@@ -1,29 +1,42 @@
 rules_version = '2';
 
 service cloud.firestore {
+
   match /databases/{database}/documents {
 
-    // THAY email này bằng email BTC thật.
     function isAdmin() {
+
       return request.auth != null
         && request.auth.token.email != null
         && request.auth.token.email == "thaibaoh2002@gmail.com";
+
     }
 
+
     match /teams/{teamId} {
-      // Đội tạo đúng document mang UID của chính mình.
+
       allow create: if request.auth != null
                     && request.auth.uid == teamId;
 
-      // Đội chỉ được cập nhật dữ liệu của chính mình.
-      // BTC có thể cập nhật mọi đội.
-      allow update: if (request.auth != null && request.auth.uid == teamId)
-                    || isAdmin();
 
-      // Chỉ BTC được xem danh sách toàn bộ đội.
-      allow read: if isAdmin();
+      allow read: if request.auth != null
+                  && (
+                    request.auth.uid == teamId
+                    || isAdmin()
+                  );
+
+
+      allow update: if request.auth != null
+                    && (
+                      request.auth.uid == teamId
+                      || isAdmin()
+                    );
+
 
       allow delete: if isAdmin();
+
     }
+
   }
+
 }

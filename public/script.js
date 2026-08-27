@@ -6,25 +6,40 @@ import {
 
 import {
   getAuth,
-  signInAnonymously
+  signInAnonymously,
+  onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 import {
   getFirestore,
   doc,
   setDoc,
+  getDoc,
   updateDoc,
   serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 
+/* =====================================================
+   FIREBASE
+===================================================== */
+
 const app = initializeApp(firebaseConfig);
+
 const auth = getAuth(app);
+
 const db = getFirestore(app);
 
 
 /* =====================================================
    DỮ LIỆU GAME
+
+   Bạn có thể thay các đáp án này sau.
+
+   LƯU Ý:
+   - Không dấu
+   - Không khoảng trắng
+   - Tối đa khoảng 15 ký tự
 ===================================================== */
 
 const ROUNDS = [
@@ -32,25 +47,49 @@ const ROUNDS = [
   {
     round: 1,
     seconds: 180,
-    words: ["AGENT", "MODEL", "TOKEN", "PROMT", "CLOUD"]
+    words: [
+      "AGENT",
+      "MODEL",
+      "TOKEN",
+      "PROMPT",
+      "CLOUD"
+    ]
   },
 
   {
     round: 2,
     seconds: 300,
-    words: ["ROBOT", "VOICE", "IMAGE", "AUDIO", "SMART"]
+    words: [
+      "ROBOT",
+      "VOICE",
+      "IMAGE",
+      "AUDIO",
+      "SMART"
+    ]
   },
 
   {
     round: 3,
     seconds: 420,
-    words: ["LEARN", "TRAIN", "BRAIN", "LOGIC", "CHIPS"]
+    words: [
+      "LEARNING",
+      "TRAINING",
+      "NEURAL",
+      "LOGIC",
+      "CHIP"
+    ]
   },
 
   {
     round: 4,
     seconds: 600,
-    words: ["PIXEL", "DEPTH", "LLAMA", "GEMMA", "CODEX"]
+    words: [
+      "CHATBOT",
+      "DEEPMIND",
+      "TRITUENHANTAO",
+      "MACHINELEARN",
+      "COMPUTERVISION"
+    ]
   }
 
 ];
@@ -153,14 +192,27 @@ let currentInput = "";
 
 let timerInterval = null;
 
-let roundDeadline = null;
-
 let busy = false;
+
+let authReady = false;
 
 
 /* =====================================================
-   SAVE LOCAL
+   TIỆN ÍCH
 ===================================================== */
+
+function normalizeWord(text) {
+
+  return String(text)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/đ/g, "d")
+    .replace(/Đ/g, "D")
+    .replace(/\s+/g, "")
+    .toUpperCase();
+
+}
+
 
 function saveState() {
 
@@ -172,20 +224,67 @@ function saveState() {
 }
 
 
+function clearLocalGame() {
+
+  localStorage.removeItem(
+    "aiWordleUid"
+  );
+
+  localStorage.removeItem(
+    "aiWordleTeamName"
+  );
+
+  localStorage.removeItem(
+    "aiWordleState"
+  );
+
+  uid = "";
+
+  teamName = "";
+
+  state = null;
+
+}
+
+
+function formatTime(seconds) {
+
+  const safeSeconds =
+    Math.max(0, seconds);
+
+  const minutes =
+    Math.floor(safeSeconds / 60)
+      .toString()
+      .padStart(2, "0");
+
+  const secs =
+    (safeSeconds % 60)
+      .toString()
+      .padStart(2, "0");
+
+  return `${minutes}:${secs}`;
+
+}
+
+
 /* =====================================================
-   SCREEN
+   CHUYỂN MÀN HÌNH
 ===================================================== */
 
 function showScreen(screen) {
 
-  [
+  const screens = [
+
     joinScreen,
     roundSelectScreen,
     questionSelectScreen,
     gameScreen,
     transitionScreen,
     finishScreen
-  ].forEach(item => {
+
+  ];
+
+  screens.forEach(item => {
 
     if (item) {
       item.classList.remove("active");
@@ -193,28 +292,10 @@ function showScreen(screen) {
 
   });
 
-  screen.classList.add("active");
 
-}
-
-
-/* =====================================================
-   TIME
-===================================================== */
-
-function formatTime(seconds) {
-
-  const minutes =
-    Math.floor(seconds / 60)
-      .toString()
-      .padStart(2, "0");
-
-  const secs =
-    (seconds % 60)
-      .toString()
-      .padStart(2, "0");
-
-  return `${minutes}:${secs}`;
+  if (screen) {
+    screen.classList.add("active");
+  }
 
 }
 
@@ -225,7 +306,7 @@ function formatTime(seconds) {
 
 async function saveTeam(extra = {}) {
 
-  if (!uid) return;
+  if (!uid || !state) return;
 
   try {
 
@@ -236,21 +317,21 @@ async function saveTeam(extra = {}) {
         teamName,
 
         status:
-          state?.status || "playing",
+          state.status || "playing",
 
         currentRound:
-          state?.currentRound + 1 || 1,
+          state.currentRound + 1,
 
         currentQuestion:
-          state?.selectedQuestion !== null
+          state.selectedQuestion !== null
             ? state.selectedQuestion + 1
             : null,
 
         lockedRounds:
-          state?.lockedRounds || [],
+          state.lockedRounds || [],
 
         round4LockedQuestions:
-          state?.round4LockedQuestions || [],
+          state.round4LockedQuestions || [],
 
         lastActive:
           serverTimestamp(),
@@ -262,9 +343,55 @@ async function saveTeam(extra = {}) {
 
   } catch (error) {
 
-    console.error(error);
+    console.error(
+      "Lỗi lưu Firebase:",
+      error
+    );
 
   }
+
+}
+
+
+/* =====================================================
+   KIỂM TRA ĐỘI CÒN TỒN TẠI
+===================================================== */
+
+async function checkExistingTeam() {
+
+  if (!auth.currentUser) {
+    return false;
+  }
+
+
+  const teamRef =
+    doc(
+      db,
+      "teams",
+      auth.currentUser.uid
+    );
+
+
+  const teamSnap =
+    await getDoc(teamRef);
+
+
+  /*
+     ADMIN ĐÃ XÓA ĐỘI
+  */
+
+  if (!teamSnap.exists()) {
+
+    clearLocalGame();
+
+    showScreen(joinScreen);
+
+    return false;
+
+  }
+
+
+  return teamSnap;
 
 }
 
@@ -289,36 +416,44 @@ async function joinGame() {
   }
 
 
+  if (!authReady) {
+
+    joinMessage.textContent =
+      "Đang kết nối Firebase...";
+
+    return;
+
+  }
+
+
   joinBtn.disabled = true;
 
   joinMessage.textContent =
-    "Đang kết nối hệ thống...";
+    "Đang khởi tạo đội chơi...";
 
 
   try {
 
-    const credential =
-      await signInAnonymously(auth);
+    let user =
+      auth.currentUser;
+
+
+    if (!user) {
+
+      const credential =
+        await signInAnonymously(auth);
+
+      user =
+        credential.user;
+
+    }
 
 
     uid =
-      credential.user.uid;
-
+      user.uid;
 
     teamName =
       name;
-
-
-    localStorage.setItem(
-      "aiWordleUid",
-      uid
-    );
-
-
-    localStorage.setItem(
-      "aiWordleTeamName",
-      teamName
-    );
 
 
     state = {
@@ -338,6 +473,18 @@ async function joinGame() {
       roundDeadline: null
 
     };
+
+
+    localStorage.setItem(
+      "aiWordleUid",
+      uid
+    );
+
+
+    localStorage.setItem(
+      "aiWordleTeamName",
+      teamName
+    );
 
 
     saveState();
@@ -365,9 +512,6 @@ async function joinGame() {
         lastActive:
           serverTimestamp()
 
-      },
-      {
-        merge: true
       }
     );
 
@@ -380,9 +524,10 @@ async function joinGame() {
     console.error(error);
 
     joinMessage.textContent =
-      "Không thể kết nối Firebase.";
+      "Không thể kết nối Firebase. Kiểm tra Authentication và Firestore Rules.";
 
-    joinBtn.disabled = false;
+    joinBtn.disabled =
+      false;
 
   }
 
@@ -390,98 +535,159 @@ async function joinGame() {
 
 
 /* =====================================================
-   ROUND SELECT
+   HIỂN THỊ 4 LẦN CHƠI
 ===================================================== */
 
 function showRoundSelection() {
 
-  clearInterval(timerInterval);
-
-  roundTeamName.textContent =
-    teamName;
-
-
-  roundList.innerHTML = "";
+  clearInterval(
+    timerInterval
+  );
 
 
-  ROUNDS.forEach((round, index) => {
+  if (!state) {
 
-    const card =
-      document.createElement("div");
+    showScreen(
+      joinScreen
+    );
 
+    return;
 
-    card.className =
-      "round-card";
-
-
-    const isLocked =
-      state.lockedRounds.includes(index);
+  }
 
 
-    const isCurrent =
-      index === state.currentRound;
+  if (!roundList) {
+
+    console.error(
+      "Không tìm thấy roundList trong HTML."
+    );
+
+    return;
+
+  }
 
 
-    if (isLocked) {
+  if (roundTeamName) {
 
-      card.classList.add("locked");
+    roundTeamName.textContent =
+      teamName;
+
+  }
+
+
+  roundList.innerHTML =
+    "";
+
+
+  ROUNDS.forEach(
+    (round, index) => {
+
+      const card =
+        document.createElement("div");
+
+
+      card.className =
+        "round-card";
+
+
+      const isLocked =
+        state.lockedRounds.includes(
+          index
+        );
+
+
+      const isCurrent =
+        index ===
+        state.currentRound;
+
+
+      const isPast =
+        index <
+        state.currentRound;
+
+
+      if (isLocked) {
+
+        card.classList.add(
+          "locked"
+        );
+
+      }
+
+
+      if (isCurrent) {
+
+        card.classList.add(
+          "active"
+        );
+
+      }
+
+
+      let statusText =
+        "🔒 CHƯA MỞ";
+
+
+      if (isLocked) {
+
+        statusText =
+          "🔒 ĐÃ THẤT BẠI";
+
+      }
+
+      else if (isCurrent) {
+
+        statusText =
+          "🟢 CÓ THỂ CHƠI";
+
+      }
+
+      else if (isPast) {
+
+        statusText =
+          "🔒 ĐÃ KHÓA";
+
+      }
+
+
+      card.innerHTML = `
+
+        <h3>LẦN ${index + 1}</h3>
+
+        <span class="round-time">
+          ${formatTime(round.seconds)}
+        </span>
+
+        <span class="round-status">
+          ${statusText}
+        </span>
+
+      `;
+
+
+      if (
+        isCurrent &&
+        !isLocked
+      ) {
+
+        card.onclick =
+          () => {
+
+            showQuestionSelection(
+              index
+            );
+
+          };
+
+      }
+
+
+      roundList.appendChild(
+        card
+      );
 
     }
-
-
-    if (isCurrent) {
-
-      card.classList.add("active");
-
-    }
-
-
-    let statusText =
-      "🔒 KHÓA";
-
-
-    if (isLocked) {
-
-      statusText =
-        "🔒 ĐÃ THẤT BẠI";
-
-    } else if (isCurrent) {
-
-      statusText =
-        "🟢 CÓ THỂ CHƠI";
-
-    }
-
-
-    card.innerHTML = `
-
-      <h3>LẦN ${index + 1}</h3>
-
-      <span class="round-time">
-        ${formatTime(round.seconds)}
-      </span>
-
-      <span class="round-status">
-        ${statusText}
-      </span>
-
-    `;
-
-
-    if (isCurrent && !isLocked) {
-
-      card.onclick = () => {
-
-        showQuestionSelection(index);
-
-      };
-
-    }
-
-
-    roundList.appendChild(card);
-
-  });
+  );
 
 
   showScreen(
@@ -495,12 +701,18 @@ function showRoundSelection() {
 
 
 /* =====================================================
-   QUESTION SELECT
+   CHỌN 1 TRONG 5 CÂU
 ===================================================== */
 
-function showQuestionSelection(roundIndex) {
+function showQuestionSelection(
+  roundIndex
+) {
 
-  if (roundIndex !== state.currentRound) {
+  if (
+    !state ||
+    roundIndex !==
+    state.currentRound
+  ) {
     return;
   }
 
@@ -509,71 +721,95 @@ function showQuestionSelection(roundIndex) {
     ROUNDS[roundIndex];
 
 
-  questionRoundLabel.textContent =
-    `LẦN ${roundIndex + 1}`;
+  if (questionRoundLabel) {
+
+    questionRoundLabel.textContent =
+      `LẦN ${roundIndex + 1}`;
+
+  }
 
 
-  questionTime.textContent =
-    `THỜI GIAN: ${formatTime(round.seconds)}`;
+  if (questionTime) {
+
+    questionTime.textContent =
+      `THỜI GIAN: ${formatTime(round.seconds)}`;
+
+  }
 
 
-  questionList.innerHTML = "";
+  questionList.innerHTML =
+    "";
 
 
-  round.words.forEach((word, index) => {
+  round.words.forEach(
+    (word, index) => {
 
-    const card =
-      document.createElement("div");
-
-
-    card.className =
-      "question-card";
+      const card =
+        document.createElement("div");
 
 
-    const locked =
-      roundIndex === 3 &&
-      state.round4LockedQuestions.includes(index);
+      card.className =
+        "question-card";
 
 
-    if (locked) {
+      /*
+         LẦN 4:
+         Câu nào thất bại
+         chỉ khóa câu đó
+      */
 
-      card.classList.add("locked");
-
-    }
-
-
-    card.innerHTML = `
-
-      <strong>
-        CÂU ${index + 1}
-      </strong>
-
-      <span>
-        ${locked
-          ? "ĐÃ KHÓA"
-          : "SẴN SÀNG"}
-      </span>
-
-    `;
-
-
-    if (!locked) {
-
-      card.onclick = () => {
-
-        startQuestion(
-          roundIndex,
+      const locked =
+        roundIndex === 3 &&
+        state.round4LockedQuestions.includes(
           index
         );
 
-      };
+
+      if (locked) {
+
+        card.classList.add(
+          "locked"
+        );
+
+      }
+
+
+      card.innerHTML = `
+
+        <strong>
+          CÂU ${index + 1}
+        </strong>
+
+        <span>
+          ${locked
+            ? "ĐÃ KHÓA"
+            : "SẴN SÀNG"}
+        </span>
+
+      `;
+
+
+      if (!locked) {
+
+        card.onclick =
+          () => {
+
+            startQuestion(
+              roundIndex,
+              index
+            );
+
+          };
+
+      }
+
+
+      questionList.appendChild(
+        card
+      );
 
     }
-
-
-    questionList.appendChild(card);
-
-  });
+  );
 
 
   showScreen(
@@ -584,7 +820,36 @@ function showQuestionSelection(roundIndex) {
 
 
 /* =====================================================
-   START QUESTION
+   LẤY ĐÁP ÁN HIỆN TẠI
+===================================================== */
+
+function getCurrentAnswer() {
+
+  if (
+    !state ||
+    state.selectedQuestion === null
+  ) {
+    return "";
+  }
+
+
+  const answer =
+    ROUNDS[
+      state.currentRound
+    ].words[
+      state.selectedQuestion
+    ];
+
+
+  return normalizeWord(
+    answer
+  );
+
+}
+
+
+/* =====================================================
+   BẮT ĐẦU CÂU
 ===================================================== */
 
 function startQuestion(
@@ -593,7 +858,17 @@ function startQuestion(
   restoring = false
 ) {
 
-  clearInterval(timerInterval);
+  clearInterval(
+    timerInterval
+  );
+
+
+  if (
+    roundIndex !==
+    state.currentRound
+  ) {
+    return;
+  }
 
 
   state.currentRound =
@@ -604,8 +879,24 @@ function startQuestion(
     questionIndex;
 
 
-  state.guessRow =
-    0;
+  /*
+     Nếu không restore
+     thì bắt đầu lại lượt đoán
+  */
+
+  if (!restoring) {
+
+    state.guessRow =
+      0;
+
+    state.roundDeadline =
+      Date.now() +
+      (
+        ROUNDS[roundIndex]
+          .seconds * 1000
+      );
+
+  }
 
 
   state.status =
@@ -620,66 +911,51 @@ function startQuestion(
     false;
 
 
-  if (
-    !restoring ||
-    !state.roundDeadline
-  ) {
-
-    roundDeadline =
-      Date.now() +
-      ROUNDS[roundIndex].seconds * 1000;
+  saveState();
 
 
-    state.roundDeadline =
-      roundDeadline;
+  if (teamDisplay) {
 
-  } else {
-
-    roundDeadline =
-      state.roundDeadline;
+    teamDisplay.textContent =
+      teamName;
 
   }
 
 
-  saveState();
+  if (roundLabel) {
+
+    roundLabel.textContent =
+      `LẦN ${roundIndex + 1}`;
+
+  }
 
 
-  teamDisplay.textContent =
-    teamName;
+  /*
+     Chỉ hiển thị LẦN chơi
+     Không còn lỗi CÂU nah/5
+  */
+
+  if (roundInfo) {
+
+    roundInfo.textContent =
+      "ĐANG CHƠI";
+
+  }
 
 
-  roundLabel.textContent =
-    `LẦN ${roundIndex + 1}`;
-
-
-  roundInfo.textContent =
-    `CÂU ${questionIndex + 1}/5`;
-
-
-  document
-    .querySelectorAll(".progress-dot")
-    .forEach((dot, index) => {
-
-      dot.classList.toggle(
-        "active",
-        index === roundIndex
-      );
-
-      dot.classList.toggle(
-        "done",
-        index < roundIndex
-      );
-
-    });
+  updateProgressDots(
+    roundIndex
+  );
 
 
   buildBoard();
+
 
   clearKeyboard();
 
 
   statusBanner.textContent =
-    "HÃY NHẬP MỘT TỪ GỒM 5 KÝ TỰ";
+    "HÃY DỰ ĐOÁN TỪ KHÓA";
 
 
   statusBanner.className =
@@ -700,39 +976,89 @@ function startQuestion(
 
 
 /* =====================================================
+   TIẾN TRÌNH 4 LẦN
+===================================================== */
+
+function updateProgressDots(
+  currentRound
+) {
+
+  document
+    .querySelectorAll(
+      ".progress-dot"
+    )
+    .forEach(
+      (dot, index) => {
+
+        dot.classList.toggle(
+          "active",
+          index === currentRound
+        );
+
+
+        dot.classList.toggle(
+          "done",
+          index < currentRound
+        );
+
+      }
+    );
+
+}
+
+
+/* =====================================================
    TIMER
 ===================================================== */
 
 function startTimer() {
 
-  clearInterval(timerInterval);
+  clearInterval(
+    timerInterval
+  );
 
 
-  const tick = () => {
+  const tick =
+    () => {
 
-    const remaining =
-      Math.max(
-        0,
-        Math.ceil(
-          (roundDeadline - Date.now()) /
-          1000
-        )
-      );
-
-
-    timerEl.textContent =
-      formatTime(remaining);
+      if (
+        !state ||
+        !state.roundDeadline
+      ) {
+        return;
+      }
 
 
-    if (remaining <= 0) {
+      const remaining =
+        Math.max(
+          0,
+          Math.ceil(
+            (
+              state.roundDeadline -
+              Date.now()
+            ) / 1000
+          )
+        );
 
-      clearInterval(timerInterval);
 
-      handleFailure();
+      timerEl.textContent =
+        formatTime(
+          remaining
+        );
 
-    }
 
-  };
+      if (remaining <= 0) {
+
+        clearInterval(
+          timerInterval
+        );
+
+
+        handleFailure();
+
+      }
+
+    };
 
 
   tick();
@@ -748,12 +1074,27 @@ function startTimer() {
 
 
 /* =====================================================
-   BOARD
+   TẠO BOARD
+   TỰ ĐỘNG THEO ĐỘ DÀI ĐÁP ÁN
 ===================================================== */
 
 function buildBoard() {
 
-  board.innerHTML = "";
+  const answer =
+    getCurrentAnswer();
+
+
+  const wordLength =
+    answer.length;
+
+
+  board.innerHTML =
+    "";
+
+
+  if (!wordLength) {
+    return;
+  }
 
 
   for (
@@ -763,7 +1104,9 @@ function buildBoard() {
   ) {
 
     const row =
-      document.createElement("div");
+      document.createElement(
+        "div"
+      );
 
 
     row.className =
@@ -774,14 +1117,20 @@ function buildBoard() {
       rowIndex;
 
 
+    row.style.gridTemplateColumns =
+      `repeat(${wordLength}, minmax(0, 1fr))`;
+
+
     for (
       let col = 0;
-      col < 5;
+      col < wordLength;
       col++
     ) {
 
       const tile =
-        document.createElement("div");
+        document.createElement(
+          "div"
+        );
 
 
       tile.className =
@@ -808,7 +1157,14 @@ function buildBoard() {
 }
 
 
+/* =====================================================
+   HIỂN THỊ INPUT
+===================================================== */
+
 function renderInput() {
+
+  if (!state) return;
+
 
   const row =
     board.querySelector(
@@ -823,12 +1179,15 @@ function renderInput() {
     (tile, index) => {
 
       tile.textContent =
-        currentInput[index] || "";
+        currentInput[index] ||
+        "";
 
 
       tile.classList.toggle(
         "filled",
-        !!currentInput[index]
+        Boolean(
+          currentInput[index]
+        )
       );
 
     }
@@ -843,20 +1202,24 @@ function renderInput() {
 
 function clearKeyboard() {
 
+  if (!keyboard) return;
+
+
   keyboard
-    .querySelectorAll("button")
-    .forEach(button => {
+    .querySelectorAll(
+      "button"
+    )
+    .forEach(
+      button => {
 
-      button.disabled =
-        false;
+        button.classList.remove(
+          "correct",
+          "present",
+          "absent"
+        );
 
-      button.classList.remove(
-        "correct",
-        "present",
-        "absent"
-      );
-
-    });
+      }
+    );
 
 }
 
@@ -866,10 +1229,15 @@ function updateKeyboard(
   colors
 ) {
 
+  if (!keyboard) return;
+
+
   const priority = {
 
     absent: 1,
+
     present: 2,
+
     correct: 3
 
   };
@@ -878,9 +1246,13 @@ function updateKeyboard(
   colors.forEach(
     (color, index) => {
 
+      const letter =
+        guess[index];
+
+
       const button =
         keyboard.querySelector(
-          `[data-key="${guess[index]}"]`
+          `[data-key="${letter}"]`
         );
 
 
@@ -894,7 +1266,9 @@ function updateKeyboard(
           "correct"
         ].find(
           item =>
-            button.classList.contains(item)
+            button.classList.contains(
+              item
+            )
         );
 
 
@@ -933,7 +1307,9 @@ function colorGuess(
 ) {
 
   const result =
-    Array(5).fill(
+    Array(
+      answer.length
+    ).fill(
       "absent"
     );
 
@@ -942,18 +1318,25 @@ function colorGuess(
     answer.split("");
 
 
+  /*
+     KIỂM TRA
+     ĐÚNG CHỮ ĐÚNG VỊ TRÍ
+  */
+
   for (
     let i = 0;
-    i < 5;
+    i < answer.length;
     i++
   ) {
 
     if (
-      guess[i] === answer[i]
+      guess[i] ===
+      answer[i]
     ) {
 
       result[i] =
         "correct";
+
 
       remaining[i] =
         null;
@@ -963,16 +1346,23 @@ function colorGuess(
   }
 
 
+  /*
+     KIỂM TRA
+     ĐÚNG CHỮ SAI VỊ TRÍ
+  */
+
   for (
     let i = 0;
-    i < 5;
+    i < answer.length;
     i++
   ) {
 
     if (
       result[i] ===
       "correct"
-    ) continue;
+    ) {
+      continue;
+    }
 
 
     const index =
@@ -985,6 +1375,7 @@ function colorGuess(
 
       result[i] =
         "present";
+
 
       remaining[index] =
         null;
@@ -1007,16 +1398,25 @@ function submitGuess() {
 
   if (
     busy ||
-    state.status !== "playing"
-  ) return;
+    !state ||
+    state.status !==
+    "playing"
+  ) {
+    return;
+  }
+
+
+  const answer =
+    getCurrentAnswer();
 
 
   if (
-    currentInput.length !== 5
+    currentInput.length !==
+    answer.length
   ) {
 
     statusBanner.textContent =
-      "TỪ DỰ ĐOÁN PHẢI CÓ ĐỦ 5 KÝ TỰ";
+      `TỪ DỰ ĐOÁN PHẢI CÓ ĐỦ ${answer.length} KÝ TỰ`;
 
 
     statusBanner.className =
@@ -1026,14 +1426,6 @@ function submitGuess() {
     return;
 
   }
-
-
-  const answer =
-    ROUNDS[
-      state.currentRound
-    ].words[
-      state.selectedQuestion
-    ];
 
 
   const colors =
@@ -1049,7 +1441,11 @@ function submitGuess() {
     );
 
 
-  busy = true;
+  if (!row) return;
+
+
+  busy =
+    true;
 
 
   [...row.children].forEach(
@@ -1059,36 +1455,51 @@ function submitGuess() {
         currentInput[index];
 
 
-      setTimeout(() => {
+      setTimeout(
+        () => {
 
-        tile.classList.add(
-          colors[index]
-        );
-
-
-        if (index === 4) {
-
-          updateKeyboard(
-            currentInput,
-            colors
+          tile.classList.add(
+            colors[index]
           );
 
 
+          /*
+             ĐÃ LẬT HẾT Ô
+          */
+
           if (
-            currentInput === answer
+            index ===
+            colors.length - 1
           ) {
 
-            handleSuccess();
+            updateKeyboard(
+              currentInput,
+              colors
+            );
 
-          } else {
 
-            handleWrongGuess();
+            if (
+              currentInput ===
+              answer
+            ) {
+
+              handleSuccess();
+
+            }
+
+            else {
+
+              handleWrongGuess();
+
+            }
 
           }
 
-        }
+        },
 
-      }, index * 180);
+        index * 120
+
+      );
 
     }
   );
@@ -1097,10 +1508,15 @@ function submitGuess() {
 
 
 /* =====================================================
-   WRONG GUESS
+   SAI 1 LƯỢT
 ===================================================== */
 
 function handleWrongGuess() {
+
+  /*
+     6 hàng:
+     0 1 2 3 4 5
+  */
 
   if (
     state.guessRow >= 5
@@ -1126,11 +1542,14 @@ function handleWrongGuess() {
 
   saveState();
 
+
+  saveTeam();
+
 }
 
 
 /* =====================================================
-   SUCCESS
+   THẮNG
 ===================================================== */
 
 function handleSuccess() {
@@ -1148,30 +1567,40 @@ function handleSuccess() {
 
 
   saveTeam({
-
     status:
       "finished",
 
     finishedAt:
       serverTimestamp()
-
   });
 
 
-  document
-    .getElementById(
+  const finishTitle =
+    document.getElementById(
       "finishTitle"
-    )
-    .textContent =
+    );
+
+
+  const finishText =
+    document.getElementById(
+      "finishText"
+    );
+
+
+  if (finishTitle) {
+
+    finishTitle.textContent =
       "CHÚC MỪNG! BẠN ĐÃ GIẢI ĐÚNG";
 
+  }
 
-  document
-    .getElementById(
-      "finishText"
-    )
-    .textContent =
-      `Đội ${teamName} đã hoàn thành thử thách Lần ${state.currentRound + 1}.`;
+
+  if (finishText) {
+
+    finishText.textContent =
+      `Đội ${teamName} đã hoàn thành thử thách tại Lần ${state.currentRound + 1}.`;
+
+  }
 
 
   showScreen(
@@ -1182,7 +1611,7 @@ function handleSuccess() {
 
 
 /* =====================================================
-   FAILURE
+   THẤT BẠI
 ===================================================== */
 
 function handleFailure() {
@@ -1190,6 +1619,10 @@ function handleFailure() {
   clearInterval(
     timerInterval
   );
+
+
+  busy =
+    true;
 
 
   const round =
@@ -1203,6 +1636,10 @@ function handleFailure() {
   state.roundDeadline =
     null;
 
+
+  /*
+     LẦN 1 - 3
+  */
 
   if (round < 3) {
 
@@ -1218,6 +1655,10 @@ function handleFailure() {
 
     }
 
+
+    /*
+       CHUYỂN LẦN TIẾP THEO
+    */
 
     state.currentRound =
       round + 1;
@@ -1235,10 +1676,8 @@ function handleFailure() {
 
 
     saveTeam({
-
       status:
-        "locked"
-
+        "playing"
     });
 
 
@@ -1247,7 +1686,7 @@ function handleFailure() {
         "transitionIcon"
       )
       .textContent =
-        "⏱";
+      "⏱";
 
 
     document
@@ -1255,7 +1694,7 @@ function handleFailure() {
         "transitionKicker"
       )
       .textContent =
-        "THỬ THÁCH CHƯA THÀNH CÔNG";
+      "THỬ THÁCH CHƯA THÀNH CÔNG";
 
 
     document
@@ -1263,7 +1702,7 @@ function handleFailure() {
         "transitionTitle"
       )
       .textContent =
-        `LẦN ${round + 1} ĐÃ BỊ KHÓA`;
+      `LẦN ${round + 1} ĐÃ BỊ KHÓA`;
 
 
     document
@@ -1271,7 +1710,7 @@ function handleFailure() {
         "transitionText"
       )
       .textContent =
-        `Bạn được chuyển sang Lần ${round + 2}.`;
+      `Bạn được chuyển sang Lần ${round + 2}.`;
 
 
     continueBtn.textContent =
@@ -1288,21 +1727,26 @@ function handleFailure() {
   }
 
 
-  /* =============================
+  /*
+     =========================
      LẦN 4
-  ============================= */
+     CHỈ KHÓA CÂU ĐÃ CHƠI
+     =========================
+  */
 
   const question =
     state.selectedQuestion;
 
 
   if (
-    !state.round4LockedQuestions
-      .includes(question)
+    !state.round4LockedQuestions.includes(
+      question
+    )
   ) {
 
-    state.round4LockedQuestions
-      .push(question);
+    state.round4LockedQuestions.push(
+      question
+    );
 
   }
 
@@ -1319,10 +1763,8 @@ function handleFailure() {
 
 
   saveTeam({
-
     status:
       "playing"
-
   });
 
 
@@ -1331,7 +1773,7 @@ function handleFailure() {
       "transitionIcon"
     )
     .textContent =
-      "🔒";
+    "🔒";
 
 
   document
@@ -1339,7 +1781,7 @@ function handleFailure() {
       "transitionKicker"
     )
     .textContent =
-      "CÂU ĐÃ BỊ KHÓA";
+    "CÂU ĐÃ BỊ KHÓA";
 
 
   document
@@ -1347,7 +1789,7 @@ function handleFailure() {
       "transitionTitle"
     )
     .textContent =
-      `CÂU ${question + 1} KHÔNG THÀNH CÔNG`;
+    `CÂU ${question + 1} KHÔNG THÀNH CÔNG`;
 
 
   document
@@ -1355,11 +1797,15 @@ function handleFailure() {
       "transitionText"
     )
     .textContent =
-      "Bạn vẫn có thể chọn một câu khác trong Lần 4.";
+    "Bạn vẫn có thể chọn một câu khác trong Lần 4.";
 
 
   continueBtn.textContent =
     "CHỌN CÂU KHÁC";
+
+
+  busy =
+    false;
 
 
   showScreen(
@@ -1374,6 +1820,15 @@ function handleFailure() {
 ===================================================== */
 
 function continueGame() {
+
+  busy =
+    false;
+
+
+  /*
+     Nếu đang Lần 4
+     và chưa chọn câu
+  */
 
   if (
     state.currentRound === 3 &&
@@ -1395,19 +1850,28 @@ function continueGame() {
 
 
 /* =====================================================
-   KEYBOARD INPUT
+   NHẬP BÀN PHÍM
 ===================================================== */
 
 function handleKey(key) {
 
   if (
+    !gameScreen ||
     !gameScreen.classList.contains(
       "active"
     )
-  ) return;
+  ) {
+    return;
+  }
 
 
-  if (busy) return;
+  if (busy) {
+    return;
+  }
+
+
+  const answer =
+    getCurrentAnswer();
 
 
   if (
@@ -1416,10 +1880,12 @@ function handleKey(key) {
 
     submitGuess();
 
+    return;
+
   }
 
 
-  else if (
+  if (
     key === "BACK"
   ) {
 
@@ -1432,19 +1898,29 @@ function handleKey(key) {
 
     renderInput();
 
+    return;
+
   }
 
 
-  else if (
-    /^[A-Z]$/.test(key) &&
-    currentInput.length < 5
+  if (
+    /^[A-Z]$/.test(
+      key
+    )
   ) {
 
-    currentInput +=
-      key;
+    if (
+      currentInput.length <
+      answer.length
+    ) {
+
+      currentInput +=
+        key;
 
 
-    renderInput();
+      renderInput();
+
+    }
 
   }
 
@@ -1452,16 +1928,46 @@ function handleKey(key) {
 
 
 /* =====================================================
-   RESTORE
+   KHÔI PHỤC GAME SAU REFRESH
 ===================================================== */
 
-function restoreOrJoin() {
+async function restoreGame() {
 
   if (
-    uid &&
-    teamName &&
-    state
+    !uid ||
+    !teamName ||
+    !state
   ) {
+
+    showScreen(
+      joinScreen
+    );
+
+    return;
+
+  }
+
+
+  try {
+
+    const teamSnap =
+      await checkExistingTeam();
+
+
+    /*
+       ADMIN ĐÃ XÓA ĐỘI
+    */
+
+    if (!teamSnap) {
+
+      return;
+
+    }
+
+
+    /*
+       GAME ĐÃ HOÀN THÀNH
+    */
 
     if (
       state.status ===
@@ -1477,6 +1983,10 @@ function restoreOrJoin() {
     }
 
 
+    /*
+       ĐANG CHƠI VÀ CÒN THỜI GIAN
+    */
+
     if (
       state.selectedQuestion !== null &&
       state.roundDeadline &&
@@ -1490,24 +2000,50 @@ function restoreOrJoin() {
         true
       );
 
-    } else {
-
-      state.selectedQuestion =
-        null;
-
-      state.roundDeadline =
-        null;
-
-      saveState();
-
-      showRoundSelection();
+      return;
 
     }
 
-  }
+
+    /*
+       HẾT GIỜ TRONG LÚC REFRESH
+    */
+
+    if (
+      state.selectedQuestion !== null &&
+      state.roundDeadline &&
+      Date.now() >=
+      state.roundDeadline
+    ) {
+
+      handleFailure();
+
+      return;
+
+    }
 
 
-  else {
+    state.selectedQuestion =
+      null;
+
+
+    state.roundDeadline =
+      null;
+
+
+    saveState();
+
+
+    showRoundSelection();
+
+
+  } catch (error) {
+
+    console.error(
+      "Lỗi khôi phục game:",
+      error
+    );
+
 
     showScreen(
       joinScreen
@@ -1519,7 +2055,66 @@ function restoreOrJoin() {
 
 
 /* =====================================================
-   EVENT
+   AUTH STATE
+===================================================== */
+
+onAuthStateChanged(
+  auth,
+
+  async user => {
+
+    authReady =
+      true;
+
+
+    /*
+       Nếu chưa đăng nhập
+       thì chỉ hiện màn nhập tên.
+
+       Khi bấm bắt đầu
+       mới tạo Anonymous User.
+    */
+
+    if (!user) {
+
+      showScreen(
+        joinScreen
+      );
+
+      return;
+
+    }
+
+
+    /*
+       Nếu đã có tài khoản Anonymous
+    */
+
+    if (
+      uid &&
+      teamName &&
+      state
+    ) {
+
+      await restoreGame();
+
+    }
+
+    else {
+
+      showScreen(
+        joinScreen
+      );
+
+    }
+
+  }
+
+);
+
+
+/* =====================================================
+   EVENTS
 ===================================================== */
 
 joinBtn.addEventListener(
@@ -1530,10 +2125,12 @@ joinBtn.addEventListener(
 
 teamNameInput.addEventListener(
   "keydown",
+
   event => {
 
     if (
-      event.key === "Enter"
+      event.key ===
+      "Enter"
     ) {
 
       joinGame();
@@ -1541,40 +2138,66 @@ teamNameInput.addEventListener(
     }
 
   }
+
 );
 
 
-keyboard.addEventListener(
-  "click",
-  event => {
+if (keyboard) {
 
-    const key =
-      event.target.dataset.key;
+  keyboard.addEventListener(
+    "click",
+
+    event => {
+
+      const key =
+        event.target.dataset.key;
 
 
-    if (key) {
+      if (key) {
 
-      handleKey(key);
+        handleKey(
+          key
+        );
+
+      }
 
     }
 
-  }
-);
+  );
+
+}
 
 
 document.addEventListener(
   "keydown",
+
   event => {
 
     if (
       event.ctrlKey ||
       event.metaKey ||
       event.altKey
-    ) return;
+    ) {
+      return;
+    }
+
+
+    /*
+       Không nhập vào game
+       khi đang gõ tên đội
+    */
+
+    if (
+      document.activeElement ===
+      teamNameInput
+    ) {
+      return;
+    }
 
 
     if (
-      event.key === "Enter"
+      event.key ===
+      "Enter"
     ) {
 
       handleKey(
@@ -1582,7 +2205,6 @@ document.addEventListener(
       );
 
     }
-
 
     else if (
       event.key ===
@@ -1595,10 +2217,11 @@ document.addEventListener(
 
     }
 
-
     else if (
       /^[a-zA-Z]$/
-        .test(event.key)
+        .test(
+          event.key
+        )
     ) {
 
       handleKey(
@@ -1608,37 +2231,56 @@ document.addEventListener(
     }
 
   }
+
 );
 
 
-continueBtn.addEventListener(
-  "click",
-  continueGame
-);
+if (continueBtn) {
+
+  continueBtn.addEventListener(
+    "click",
+    continueGame
+  );
+
+}
 
 
-backRoundBtn.addEventListener(
-  "click",
-  showRoundSelection
-);
+if (backRoundBtn) {
+
+  backRoundBtn.addEventListener(
+    "click",
+    showRoundSelection
+  );
+
+}
 
 
 /* =====================================================
-   ADMIN RESET
+   ADMIN MODAL
+   CLICK TIÊU ĐỀ 5 LẦN
 ===================================================== */
 
-let titleClicks = 0;
+let titleClicks =
+  0;
 
 let titleTimer;
 
 
-document
-  .querySelector("#joinScreen h1")
-  .addEventListener(
+const mainTitle =
+  document.querySelector(
+    "#joinScreen h1"
+  );
+
+
+if (mainTitle) {
+
+  mainTitle.addEventListener(
     "click",
+
     () => {
 
       titleClicks++;
+
 
       clearTimeout(
         titleTimer
@@ -1649,9 +2291,11 @@ document
         setTimeout(
           () => {
 
-            titleClicks = 0;
+            titleClicks =
+              0;
 
           },
+
           1500
         );
 
@@ -1660,7 +2304,9 @@ document
         titleClicks >= 5
       ) {
 
-        titleClicks = 0;
+        titleClicks =
+          0;
+
 
         document
           .getElementById(
@@ -1673,145 +2319,177 @@ document
       }
 
     }
+
+  );
+
+}
+
+
+/* =====================================================
+   ĐÓNG ADMIN MODAL
+===================================================== */
+
+const closeAdminModal =
+  document.getElementById(
+    "closeAdminModal"
   );
 
 
-document
-  .getElementById(
-    "closeAdminModal"
-  )
-  .onclick =
-  () => {
+if (closeAdminModal) {
 
-    document
-      .getElementById(
-        "adminModal"
-      )
-      .classList.remove(
-        "show"
-      );
+  closeAdminModal.onclick =
+    () => {
 
-  };
-
-
-document
-  .getElementById(
-    "adminCommandBtn"
-  )
-  .onclick =
-  () => {
-
-    const cmd =
       document
         .getElementById(
-          "adminCommandInput"
+          "adminModal"
         )
-        .value
-        .trim()
-        .toLowerCase();
+        .classList.remove(
+          "show"
+        );
+
+    };
+
+}
 
 
-    const msg =
-      document
-        .getElementById(
+/* =====================================================
+   RESET 1 - 4
+===================================================== */
+
+const adminCommandBtn =
+  document.getElementById(
+    "adminCommandBtn"
+  );
+
+
+if (adminCommandBtn) {
+
+  adminCommandBtn.onclick =
+    async () => {
+
+      const input =
+        document.getElementById(
+          "adminCommandInput"
+        );
+
+
+      const msg =
+        document.getElementById(
           "adminCommandMessage"
         );
 
 
-    const match =
-      cmd.match(
-        /^reset([1-4])$/
-      );
+      const cmd =
+        input.value
+          .trim()
+          .toLowerCase();
 
 
-    if (
-      !match ||
-      !state
-    ) {
-
-      msg.textContent =
-        "Lệnh không hợp lệ.";
-
-      return;
-
-    }
+      const match =
+        cmd.match(
+          /^reset([1-4])$/
+        );
 
 
-    const targetRound =
-      Number(
-        match[1]
-      ) - 1;
+      if (
+        !match ||
+        !state
+      ) {
+
+        msg.textContent =
+          "Lệnh không hợp lệ.";
+
+        return;
+
+      }
 
 
-    state.currentRound =
-      targetRound;
+      const targetRound =
+        Number(
+          match[1]
+        ) - 1;
 
 
-    state.selectedQuestion =
-      null;
+      state.currentRound =
+        targetRound;
 
 
-    state.guessRow =
-      0;
+      state.selectedQuestion =
+        null;
 
 
-    state.status =
-      "playing";
+      state.guessRow =
+        0;
 
 
-    state.roundDeadline =
-      null;
+      state.status =
+        "playing";
 
 
-    if (
-      targetRound < 3
-    ) {
+      state.roundDeadline =
+        null;
+
+
+      /*
+         MỞ KHÓA
+         TỪ VÒNG RESET
+      */
 
       state.lockedRounds =
         state.lockedRounds.filter(
           round =>
-            round < targetRound
+            round <
+            targetRound
         );
 
-    }
+
+      /*
+         Reset lần 4
+      */
+
+      if (
+        targetRound === 3
+      ) {
+
+        state.round4LockedQuestions =
+          [];
+
+      }
 
 
-    if (
-      targetRound === 3
-    ) {
-
-      state.round4LockedQuestions =
-        [];
-
-    }
+      saveState();
 
 
-    saveState();
+      await saveTeam({
+        status:
+          "playing"
+      });
 
 
-    msg.textContent =
-      `Đã reset về Lần ${targetRound + 1}.`;
+      msg.textContent =
+        `Đã reset về Lần ${targetRound + 1}.`;
 
 
-    setTimeout(
-      () => {
+      setTimeout(
+        () => {
 
-        document
-          .getElementById(
-            "adminModal"
-          )
-          .classList.remove(
-            "show"
-          );
-
-
-        showRoundSelection();
-
-      },
-      600
-    );
-
-  };
+          document
+            .getElementById(
+              "adminModal"
+            )
+            .classList.remove(
+              "show"
+            );
 
 
-restoreOrJoin();
+          showRoundSelection();
+
+        },
+
+        600
+      );
+
+    };
+
+}
