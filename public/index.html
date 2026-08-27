@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI WORDLE CHALLENGE</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="bg-orb orb-1"></div>
+  <div class="bg-orb orb-2"></div>
+
+  <main class="app-shell">
+    <section id="joinScreen" class="screen active">
+      <div class="logo-mark">AI</div>
+      <p class="eyebrow">THỬ THÁCH TRÍ TUỆ NHÂN TẠO</p>
+      <h1>AI WORDLE<br><span>CHALLENGE</span></h1>
+      <p class="intro">Giải mã 20 từ khóa về trí tuệ nhân tạo qua 4 vòng thử thách.</p>
+
+      <div class="join-card">
+        <label for="teamName">TÊN ĐỘI</label>
+        <input id="teamName" maxlength="60" autocomplete="organization"
+          placeholder="Nhập tên đội của bạn">
+        <button id="joinBtn" class="primary-btn">XÁC NHẬN & BẮT ĐẦU</button>
+        <p id="joinMessage" class="message"></p>
+      </div>
+      <p class="rule-note">🟩 Đúng chữ đúng vị trí · 🟨 Đúng chữ sai vị trí · ⬜ Không có trong đáp án</p>
+    </section>
+
+    <section id="gameScreen" class="screen">
+      <header class="game-header">
+        <div class="team-box">
+          <span>ĐỘI THI</span>
+          <strong id="teamDisplay">---</strong>
+        </div>
+        <div class="round-box">
+          <span id="roundLabel">VÒNG 1</span>
+          <strong id="roundInfo">CÂU 1/5</strong>
+        </div>
+        <div class="timer-box">
+          <span>THỜI GIAN CÒN LẠI</span>
+          <strong id="timer">03:00</strong>
+        </div>
+      </header>
+
+      <div class="game-main">
+        <div class="progress-wrap">
+          <div class="round-progress">
+            <span class="progress-dot active" data-round="1">1</span>
+            <span class="progress-line"></span>
+            <span class="progress-dot" data-round="2">2</span>
+            <span class="progress-line"></span>
+            <span class="progress-dot" data-round="3">3</span>
+            <span class="progress-line"></span>
+            <span class="progress-dot" data-round="4">4</span>
+          </div>
+        </div>
+
+        <div id="statusBanner" class="status-banner">HÃY NHẬP MỘT TỪ GỒM 5 KÝ TỰ</div>
+
+        <div id="board" class="board" aria-label="Bảng Wordle"></div>
+
+        <div class="keyboard" id="keyboard">
+          <div class="key-row">
+            <button data-key="Q">Q</button><button data-key="W">W</button><button data-key="E">E</button>
+            <button data-key="R">R</button><button data-key="T">T</button><button data-key="Y">Y</button>
+            <button data-key="U">U</button><button data-key="I">I</button><button data-key="O">O</button><button data-key="P">P</button>
+          </div>
+          <div class="key-row">
+            <button data-key="A">A</button><button data-key="S">S</button><button data-key="D">D</button>
+            <button data-key="F">F</button><button data-key="G">G</button><button data-key="H">H</button>
+            <button data-key="J">J</button><button data-key="K">K</button><button data-key="L">L</button>
+          </div>
+          <div class="key-row">
+            <button class="wide" data-key="ENTER">ENTER</button>
+            <button data-key="Z">Z</button><button data-key="X">X</button><button data-key="C">C</button>
+            <button data-key="V">V</button><button data-key="B">B</button><button data-key="N">N</button><button data-key="M">M</button>
+            <button class="wide" data-key="BACK">⌫</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="transitionScreen" class="screen">
+      <div class="result-card">
+        <div id="transitionIcon" class="result-icon">✓</div>
+        <p id="transitionKicker" class="eyebrow">XUẤT SẮC</p>
+        <h2 id="transitionTitle">BẠN ĐÃ HOÀN THÀNH VÒNG!</h2>
+        <p id="transitionText">Chuẩn bị bước vào thử thách tiếp theo.</p>
+        <button id="continueBtn" class="primary-btn">TIẾP TỤC</button>
+      </div>
+    </section>
+
+    <section id="finishScreen" class="screen">
+      <div class="result-card">
+        <div class="result-icon">★</div>
+        <p class="eyebrow">CHÚC MỪNG</p>
+        <h2 id="finishTitle">HOÀN THÀNH THỬ THÁCH!</h2>
+        <p id="finishText">Cảm ơn đội thi đã tham gia AI WORDLE CHALLENGE.</p>
+      </div>
+    </section>
+  </main>
+
+  <div id="adminModal" class="admin-modal">
+    <div class="admin-mini-card">
+      <button id="closeAdminModal" class="close-btn">×</button>
+      <h3>TRUY CẬP BTC</h3>
+      <p>Nhập lệnh quản trị.</p>
+      <input id="adminCommandInput" placeholder="reset1 / reset2 / reset3 / reset4">
+      <button id="adminCommandBtn" class="primary-btn">THỰC HIỆN</button>
+      <p id="adminCommandMessage" class="message"></p>
+    </div>
+  </div>
+
+  <script type="module" src="script.js"></script>
+</body>
+</html>

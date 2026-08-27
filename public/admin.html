@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BTC - AI WORDLE CHALLENGE</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="admin-body">
+  <main class="admin-shell">
+    <section id="loginPanel" class="admin-login-card">
+      <div class="logo-mark">AI</div>
+      <p class="eyebrow">BAN TỔ CHỨC</p>
+      <h1>QUẢN TRỊ<br><span>AI WORDLE</span></h1>
+      <input id="email" type="email" placeholder="Email BTC">
+      <input id="password" type="password" placeholder="Mật khẩu">
+      <button id="loginBtn" class="primary-btn">ĐĂNG NHẬP</button>
+      <p id="loginMessage" class="message"></p>
+    </section>
+
+    <section id="dashboard" class="dashboard hidden">
+      <header class="admin-header">
+        <div>
+          <p class="eyebrow">THEO DÕI THỜI GIAN THỰC</p>
+          <h1>AI WORDLE <span>CONTROL ROOM</span></h1>
+        </div>
+        <button id="logoutBtn" class="secondary-btn">ĐĂNG XUẤT</button>
+      </header>
+
+      <div class="stats">
+        <div class="stat-card"><span>TỔNG ĐỘI</span><strong id="totalTeams">0</strong></div>
+        <div class="stat-card"><span>ĐANG HOẠT ĐỘNG</span><strong id="activeTeams">0</strong></div>
+        <div class="stat-card"><span>ĐÃ HOÀN THÀNH</span><strong id="finishedTeams">0</strong></div>
+      </div>
+
+      <div class="dashboard-toolbar">
+        <input id="searchTeam" placeholder="Tìm tên đội...">
+        <select id="statusFilter">
+          <option value="all">Tất cả trạng thái</option>
+          <option value="playing">Đang chơi</option>
+          <option value="finished">Hoàn thành</option>
+          <option value="locked">Hết giờ / khóa</option>
+        </select>
+      </div>
+
+      <div id="teamsGrid" class="teams-grid"></div>
+    </section>
+  </main>
+
+  <script type="module" src="admin.js"></script>
+</body>
+</html>
