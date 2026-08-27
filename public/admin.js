@@ -90,7 +90,7 @@ function timeText(ts) {
   if (!ts?.toDate) return "Chưa có dữ liệu";
   return ts.toDate().toLocaleString("vi-VN");
 }
-
+const gameRoundIndex = round - 1;
 function renderTeams() {
 
   const search =
@@ -351,21 +351,52 @@ function renderTeams() {
       try {
 
         await updateDoc(
-          doc(db, "teams", id),
-          {
-            currentRound: round,
-            currentWord: 0,
-            status: "playing",
-            locked: false,
+  doc(db, "teams", id),
+  {
+    /*
+      Firebase hiện đang hiển thị vòng theo 1 - 4
+    */
+    currentRound: round,
 
-            adminAction: "reset",
-            adminResetRound: round,
-            adminUnlockRound: null,
+    /*
+      Reset trạng thái câu hỏi
+    */
+    currentQuestion: null,
+    selectedQuestion: null,
+    currentWord: null,
+    guessRow: 0,
 
-            adminActionAt: serverTimestamp(),
-            lastActive: serverTimestamp()
-          }
-        );
+    /*
+      Mở trạng thái chơi
+    */
+    status: "playing",
+    locked: false,
+
+    /*
+      QUAN TRỌNG:
+      Reset toàn bộ các vòng bị khóa.
+
+      Nếu reset Lần 1 mà lockedRounds
+      vẫn còn [0] thì game vẫn khóa Lần 1.
+    */
+    lockedRounds: [],
+
+    /*
+      Reset danh sách câu bị khóa của Lần 4
+    */
+    round4LockedQuestions: [],
+
+    /*
+      Đánh dấu hành động admin
+    */
+    adminAction: "reset",
+    adminResetRound: round,
+    adminUnlockRound: null,
+
+    adminActionAt: serverTimestamp(),
+    lastActive: serverTimestamp()
+  }
+);x
 
         alert(
           `Đã reset đội về Lần ${round}.`
