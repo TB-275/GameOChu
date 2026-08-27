@@ -92,199 +92,201 @@ function timeText(ts) {
 }
 
 function renderTeams() {
+
   const search = searchTeam.value.trim().toLowerCase();
   const filter = statusFilter.value;
 
   const list = allTeams.filter(t =>
-    (!search ||
-      (t.teamName || "")
-        .toLowerCase()
-        .includes(search)
-    ) &&
+    (!search || (t.teamName || "").toLowerCase().includes(search)) &&
     (filter === "all" || t.status === filter)
   );
 
-  if (!list.length) {
-    teamsGrid.innerHTML = `
-      <p class="team-meta">
-        Chưa có đội phù hợp.
-      </p>
-    `;
-    return;
-  }
+  teamsGrid.innerHTML = list.length
+    ? list.map(t => {
 
-  teamsGrid.innerHTML = list.map(t => {
+      const currentRound = t.currentRound || 1;
 
-    const currentRound =
-      Number(t.currentRound) || 1;
+      return `
+        <article class="team-card">
 
-    return `
-      <article class="team-card">
+          <span class="badge ${t.status || "playing"}">
+            ${labelStatus(t.status)}
+          </span>
 
-        <span class="badge ${t.status || "playing"}">
-          ${labelStatus(t.status)}
-        </span>
+          <h3>${escapeHtml(t.teamName || "Chưa đặt tên")}</h3>
 
-        <h3>
-          ${escapeHtml(t.teamName || "Chưa đặt tên")}
-        </h3>
+          <div class="team-meta">
 
-        <div class="team-meta">
-
-          <div>
             Lần chơi hiện tại:
             <strong>LẦN ${currentRound}</strong>
-          </div>
 
-          <div>
+            <br>
+
+            Trạng thái:
+            <strong>${labelStatus(t.status)}</strong>
+
+            <br>
+
             Hoạt động gần nhất:
             ${timeText(t.lastActive)}
+
           </div>
 
-        </div>
+          <div class="card-actions">
 
-        <div class="card-actions">
+            <button
+              data-id="${t.id}"
+              data-action="unlock"
+            >
+              MỞ KHÓA
+            </button>
 
-          <button
-            data-id="${t.id}"
-            data-action="reset"
-          >
-            Reset
-          </button>
+            <button
+              data-id="${t.id}"
+              data-action="reset"
+            >
+              RESET
+            </button>
 
-          <button
-            data-id="${t.id}"
-            data-action="unlock"
-          >
-            Mở khóa
-          </button>
+            <button
+              class="delete-team-btn"
+              data-id="${t.id}"
+              data-name="${escapeHtml(t.teamName || "")}"
+              data-action="delete"
+            >
+              XÓA ĐỘI
+            </button>
 
-          <button
-            class="delete-btn"
-            data-id="${t.id}"
-            data-action="delete"
-          >
-            Xóa đội
-          </button>
+          </div>
 
-        </div>
+        </article>
+      `;
+    }).join("")
+    : `<p class="team-meta">Chưa có đội phù hợp.</p>`;
 
-      </article>
-    `;
-  }).join("");
+  teamsGrid.querySelectorAll("button[data-action]").forEach(btn => {
 
-  teamsGrid
-    .querySelectorAll("button[data-action]")
-    .forEach(btn => {
+    btn.onclick = async () => {
 
-      btn.onclick = async () => {
+      const id = btn.dataset.id;
+      const action = btn.dataset.action;
 
-        const id = btn.dataset.id;
-        const action = btn.dataset.action;
+      /* =========================
+         MỞ KHÓA
+      ========================= */
+
+      if (action === "unlock") {
 
         try {
 
-          /*
-          ======================
-          MỞ KHÓA
-          ======================
-          */
+          await updateDoc(doc(db, "teams", id), {
 
-          if (action === "unlock") {
+            status: "playing",
+            locked: false,
+            lastActive: serverTimestamp()
 
-            await updateDoc(
-              doc(db, "teams", id),
-              {
-                status: "playing",
-                locked: false,
-                lastActive: serverTimestamp()
-              }
-            );
+          });
 
-            return;
-          }
+        } catch (error) {
+
+          console.error(error);
+          alert("Không thể mở khóa đội.");
+
+        }
+
+      }
 
 
-          /*
-          ======================
-          RESET
-          ======================
-          */
+      /* =========================
+         RESET
+      ========================= */
 
-          if (action === "reset") {
+      if (action === "reset") {
 
-            const confirmReset = confirm(
-              "Reset đội này về Lần 1?"
-            );
+        const ok = confirm(
+          "Reset đội này về LẦN 1?"
+        );
 
-            if (!confirmReset) return;
+        if (!ok) return;
 
-            await updateDoc(
-              doc(db, "teams", id),
-              {
-                status: "playing",
+        try {
 
-                currentRound: 1,
+          await updateDoc(doc(db, "teams", id), {
 
-                currentWord: 1,
+            status: "playing",
 
-                locked: false,
+            currentRound: 1,
 
-                finishedRounds: [],
+            selectedQuestion: null,
 
-                lastActive: serverTimestamp()
-              }
-            );
+            currentWord: 1,
 
-            alert(
-              "Đã reset đội về Lần 1."
-            );
+            locked: false,
 
-            return;
-          }
+            finished: false,
+
+            lastActive: serverTimestamp()
+
+          });
+
+          alert("Đã reset đội về Lần 1.");
+
+        } catch (error) {
+
+          console.error(error);
+
+          alert("Không thể reset đội.");
+
+        }
+
+      }
 
 
-          /*
-          ======================
-          XÓA ĐỘI
-          ======================
-          */
+      /* =========================
+         XÓA HOÀN TOÀN
+      ========================= */
 
-          if (action === "delete") {
+      if (action === "delete") {
 
-            const confirmDelete = confirm(
-              `Bạn có chắc muốn XÓA hoàn toàn đội "${btn
-                .closest(".team-card")
-                .querySelector("h3")
-                .textContent}" không?\n\nSau khi xóa, đội có thể refresh và đăng ký chơi lại từ đầu.`
-            );
+        const team = allTeams.find(t => t.id === id);
 
-            if (!confirmDelete) return;
+        const teamName =
+          team?.teamName ||
+          "đội này";
 
-            await deleteDoc(
-              doc(db, "teams", id)
-            );
+        const ok = confirm(
+          `Bạn có chắc chắn muốn XÓA đội "${teamName}"?\n\n` +
+          "Dữ liệu đội sẽ bị xóa hoàn toàn.\n" +
+          "Đội có thể nhập lại và chơi từ đầu."
+        );
 
-            alert(
-              "Đã xóa đội khỏi hệ thống."
-            );
+        if (!ok) return;
 
-            return;
-          }
+        try {
+
+          await deleteDoc(
+            doc(db, "teams", id)
+          );
+
+          alert(
+            `Đã xóa đội "${teamName}".`
+          );
 
         } catch (error) {
 
           console.error(error);
 
           alert(
-            "Có lỗi xảy ra. Kiểm tra Firestore Rules."
+            "Không thể xóa đội. Kiểm tra Firestore Rules."
           );
 
         }
 
-      };
+      }
 
-    });
+    };
+
+  });
 
 }
 

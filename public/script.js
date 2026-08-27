@@ -48,11 +48,11 @@ const ROUNDS = [
     round: 1,
     seconds: 180,
     words: [
-      "AGENT",
-      "MODEL",
-      "TOKEN",
-      "PROMPT",
-      "CLOUD"
+      "COMAYBIETTUDUY",
+      "TRITUEVUOTCONNGUOI",
+      "KHANANGMAYVOHAN",
+      "HETHONGBIETHOCHOI",
+      "MAYMOCHIEUVANVAT"
     ]
   },
 
