@@ -1,23 +1,14 @@
-// Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
+// Firebase Configuration
+// File này chỉ chứa cấu hình Firebase và Email quản trị
 
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
-const firebaseConfig = {
+export const firebaseConfig = {
   apiKey: "AIzaSyDWPq92w48NfPzuec0TPFfni-ZVQMFJOLs",
   authDomain: "thaoluandaihoi.firebaseapp.com",
-  databaseURL: "https://thaoluandaihoi-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId: "thaoluandaihoi",
   storageBucket: "thaoluandaihoi.firebasestorage.app",
   messagingSenderId: "843405316234",
-  appId: "1:843405316234:web:06d7cd6d1d9dbd49605d73",
-  measurementId: "G-HNGH4F39TG"
+  appId: "1:843405316234:web:06d7cd6d1d9dbd49605d73"
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
+// Email tài khoản BTC
 export const ADMIN_EMAIL = "thaibaoh2002@gmail.com";
