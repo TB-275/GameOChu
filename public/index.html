@@ -13,9 +13,9 @@
   <main class="app-shell">
     <section id="joinScreen" class="screen active">
       <div class="logo-mark">AI</div>
-      <p class="eyebrow">THỬ THÁCH TRÍ TUỆ NHÂN TẠO</p>
+      <p class="eyebrow">THỬ THÁCH TRÍ TUỆ NHÂN TẠO TOÀN NĂNG</p>
       <h1>AI WORDLE<br><span>CHALLENGE</span></h1>
-      <p class="intro">Giải mã 20 từ khóa về trí tuệ nhân tạo qua 4 vòng thử thách.</p>
+      <p class="intro">Giải mã từ khóa về trí tuệ nhân tạo toàn năng.</p>
 
       <div class="join-card">
         <label for="teamName">TÊN ĐỘI</label>
@@ -26,7 +26,48 @@
       </div>
       <p class="rule-note">🟩 Đúng chữ đúng vị trí · 🟨 Đúng chữ sai vị trí · ⬜ Không có trong đáp án</p>
     </section>
+    <section id="roundSelectScreen" class="screen">
+        <div class="selection-container">
 
+          <div class="logo-mark">AI</div>
+
+          <p class="eyebrow">ĐỘI THI</p>
+
+          <h2 id="roundTeamName">---</h2>
+
+          <p class="selection-title">
+            CHỌN LẦN THỬ THÁCH
+          </p>
+
+          <div id="roundList" class="round-list"></div>
+
+        </div>
+      </section>
+      <section id="questionSelectScreen" class="screen">
+
+        <div class="selection-container">
+
+          <p class="eyebrow" id="questionRoundLabel">
+            LẦN 1
+          </p>
+
+          <h2 id="questionTime">
+            THỜI GIAN: 03:00
+          </h2>
+
+          <p class="selection-title">
+            CHỌN 01 TRONG 05 THỬ THÁCH
+          </p>
+
+          <div id="questionList" class="question-list"></div>
+
+          <button id="backRoundBtn" class="secondary-btn">
+            QUAY LẠI
+          </button>
+
+        </div>
+
+      </section>
     <section id="gameScreen" class="screen">
       <header class="game-header">
         <div class="team-box">
