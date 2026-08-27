@@ -93,200 +93,417 @@ function timeText(ts) {
 
 function renderTeams() {
 
-  const search = searchTeam.value.trim().toLowerCase();
-  const filter = statusFilter.value;
+  const search =
+    searchTeam.value
+      .trim()
+      .toLowerCase();
 
-  const list = allTeams.filter(t =>
-    (!search || (t.teamName || "").toLowerCase().includes(search)) &&
-    (filter === "all" || t.status === filter)
-  );
+  const filter =
+    statusFilter.value;
 
-  teamsGrid.innerHTML = list.length
-    ? list.map(t => {
 
-      const currentRound = t.currentRound || 1;
+  const list =
+    allTeams.filter(t =>
 
-      return `
-        <article class="team-card">
+      (
+        !search ||
 
-          <span class="badge ${t.status || "playing"}">
-            ${labelStatus(t.status)}
-          </span>
+        (t.teamName || "")
+          .toLowerCase()
+          .includes(search)
+      )
 
-          <h3>${escapeHtml(t.teamName || "Chưa đặt tên")}</h3>
+      &&
 
-          <div class="team-meta">
+      (
+        filter === "all" ||
+        t.status === filter
+      )
 
-            Lần chơi hiện tại:
-            <strong>LẦN ${currentRound}</strong>
+    );
 
-            <br>
 
-            Trạng thái:
-            <strong>${labelStatus(t.status)}</strong>
+  teamsGrid.innerHTML =
+    list.length
 
-            <br>
+      ? list.map(
+          t => {
 
-            Hoạt động gần nhất:
-            ${timeText(t.lastActive)}
+            /*
+              Firebase lưu vòng theo số 1 - 4
+              Nếu dữ liệu cũ đang là 0 - 3
+              thì vẫn hiển thị tương đối đúng.
+            */
 
-          </div>
+            const currentRound =
+              Number(
+                t.currentRound ||
+                1
+              );
 
-          <div class="card-actions">
 
-            <button
-              data-id="${t.id}"
-              data-action="unlock"
-            >
-              MỞ KHÓA
-            </button>
+            return `
 
-            <button
-              data-id="${t.id}"
-              data-action="reset"
-            >
-              RESET
-            </button>
+              <article class="team-card">
 
-            <button
-              class="delete-team-btn"
-              data-id="${t.id}"
-              data-name="${escapeHtml(t.teamName || "")}"
-              data-action="delete"
-            >
-              XÓA ĐỘI
-            </button>
+                <span class="badge ${t.status || "playing"}">
 
-          </div>
+                  ${labelStatus(t.status)}
 
-        </article>
-      `;
-    }).join("")
-    : `<p class="team-meta">Chưa có đội phù hợp.</p>`;
+                </span>
 
-  teamsGrid.querySelectorAll("button[data-action]").forEach(btn => {
 
-    btn.onclick = async () => {
+                <h3>
 
-      const id = btn.dataset.id;
-      const action = btn.dataset.action;
+                  ${escapeHtml(
+                    t.teamName ||
+                    "Chưa đặt tên"
+                  )}
 
-      /* =========================
-         MỞ KHÓA
-      ========================= */
+                </h3>
 
-      if (action === "unlock") {
 
-        try {
+                <div class="team-meta">
 
-          await updateDoc(doc(db, "teams", id), {
+                  Đang ở:
+                  <strong>
+                    Lần ${currentRound}
+                  </strong>
 
-            status: "playing",
-            locked: false,
-            lastActive: serverTimestamp()
+                  <br>
 
-          });
+                  Trạng thái:
+                  <strong>
+                    ${labelStatus(t.status)}
+                  </strong>
 
-        } catch (error) {
+                  <br>
 
-          console.error(error);
-          alert("Không thể mở khóa đội.");
+                  Hoạt động gần nhất:
+                  ${timeText(t.lastActive)}
 
-        }
+                </div>
+
+
+                <div class="admin-action-title">
+
+                  RESET LẦN CHƠI
+
+                </div>
+
+
+                <div class="card-actions round-actions">
+
+                  <button
+                    data-id="${t.id}"
+                    data-action="reset"
+                    data-round="1"
+                  >
+                    Lần 1
+                  </button>
+
+                  <button
+                    data-id="${t.id}"
+                    data-action="reset"
+                    data-round="2"
+                  >
+                    Lần 2
+                  </button>
+
+                  <button
+                    data-id="${t.id}"
+                    data-action="reset"
+                    data-round="3"
+                  >
+                    Lần 3
+                  </button>
+
+                  <button
+                    data-id="${t.id}"
+                    data-action="reset"
+                    data-round="4"
+                  >
+                    Lần 4
+                  </button>
+
+                </div>
+
+
+                <div class="admin-action-title">
+
+                  MỞ KHÓA LẦN CHƠI
+
+                </div>
+
+
+                <div class="card-actions round-actions">
+
+                  <button
+                    data-id="${t.id}"
+                    data-action="unlock"
+                    data-round="1"
+                  >
+                    Lần 1
+                  </button>
+
+                  <button
+                    data-id="${t.id}"
+                    data-action="unlock"
+                    data-round="2"
+                  >
+                    Lần 2
+                  </button>
+
+                  <button
+                    data-id="${t.id}"
+                    data-action="unlock"
+                    data-round="3"
+                  >
+                    Lần 3
+                  </button>
+
+                  <button
+                    data-id="${t.id}"
+                    data-action="unlock"
+                    data-round="4"
+                  >
+                    Lần 4
+                  </button>
+
+                </div>
+
+
+                <div class="admin-action-title">
+
+                  QUẢN LÝ ĐỘI
+
+                </div>
+
+
+                <div class="card-actions">
+
+                  <button
+                    class="delete-team-btn"
+                    data-id="${t.id}"
+                    data-action="delete"
+                  >
+                    XÓA ĐỘI
+                  </button>
+
+                </div>
+
+              </article>
+
+            `;
+
+          }
+
+        ).join("")
+
+      : `
+
+          <p class="team-meta">
+
+            Chưa có đội phù hợp.
+
+          </p>
+
+        `;
+
+
+  teamsGrid
+    .querySelectorAll(
+      "button[data-action]"
+    )
+    .forEach(
+      btn => {
+
+        btn.onclick =
+          async () => {
+
+            const id =
+              btn.dataset.id;
+
+            const action =
+              btn.dataset.action;
+
+            const round =
+              Number(
+                btn.dataset.round
+              );
+
+
+            /* =================================
+               RESET THEO LẦN
+            ================================= */
+
+            if (
+              action ===
+              "reset"
+            ) {
+
+              const ok =
+                confirm(
+                  `Bạn có chắc muốn reset đội này về Lần ${round}?`
+                );
+
+              if (!ok) return;
+
+
+              /*
+                Reset trạng thái đội.
+
+                Game phía người chơi cần refresh
+                để đọc trạng thái mới.
+              */
+
+              await updateDoc(
+                doc(
+                  db,
+                  "teams",
+                  id
+                ),
+
+                {
+
+                  currentRound:
+                    round,
+
+                  currentWord:
+                    0,
+
+                  status:
+                    "playing",
+
+                  locked:
+                    false,
+
+                  adminAction:
+                    "reset",
+
+                  adminResetRound:
+                    round,
+
+                  adminUnlockRound:
+                    null,
+
+                  adminActionAt:
+                    serverTimestamp(),
+
+                  lastActive:
+                    serverTimestamp()
+
+                }
+
+              );
+
+
+              alert(
+                `Đã reset đội về Lần ${round}.`
+              );
+
+            }
+
+
+            /* =================================
+               MỞ KHÓA THEO LẦN
+            ================================= */
+
+            else if (
+              action ===
+              "unlock"
+            ) {
+
+              const ok =
+                confirm(
+                  `Mở khóa Lần ${round} cho đội này?`
+                );
+
+              if (!ok) return;
+
+
+              await updateDoc(
+                doc(
+                  db,
+                  "teams",
+                  id
+                ),
+
+                {
+
+                  status:
+                    "playing",
+
+                  locked:
+                    false,
+
+                  currentRound:
+                    round,
+
+                  adminAction:
+                    "unlock",
+
+                  adminUnlockRound:
+                    round,
+
+                  adminResetRound:
+                    null,
+
+                  adminActionAt:
+                    serverTimestamp(),
+
+                  lastActive:
+                    serverTimestamp()
+
+                }
+
+              );
+
+
+              alert(
+                `Đã mở khóa Lần ${round}.`
+              );
+
+            }
+
+
+            /* =================================
+               XÓA ĐỘI
+            ================================= */
+
+            else if (
+              action ===
+              "delete"
+            ) {
+
+              const ok =
+                confirm(
+                  "XÓA HOÀN TOÀN ĐỘI NÀY?\n\nĐội sẽ phải nhập lại tên để chơi từ đầu."
+                );
+
+              if (!ok) return;
+
+
+              await deleteDoc(
+                doc(
+                  db,
+                  "teams",
+                  id
+                )
+              );
+
+
+              alert(
+                "Đã xóa đội khỏi hệ thống."
+              );
+
+            }
+
+          };
 
       }
 
-
-      /* =========================
-         RESET
-      ========================= */
-
-      if (action === "reset") {
-
-        const ok = confirm(
-          "Reset đội này về LẦN 1?"
-        );
-
-        if (!ok) return;
-
-        try {
-
-          await updateDoc(doc(db, "teams", id), {
-
-            status: "playing",
-
-            currentRound: 1,
-
-            selectedQuestion: null,
-
-            currentWord: 1,
-
-            locked: false,
-
-            finished: false,
-
-            lastActive: serverTimestamp()
-
-          });
-
-          alert("Đã reset đội về Lần 1.");
-
-        } catch (error) {
-
-          console.error(error);
-
-          alert("Không thể reset đội.");
-
-        }
-
-      }
-
-
-      /* =========================
-         XÓA HOÀN TOÀN
-      ========================= */
-
-      if (action === "delete") {
-
-        const team = allTeams.find(t => t.id === id);
-
-        const teamName =
-          team?.teamName ||
-          "đội này";
-
-        const ok = confirm(
-          `Bạn có chắc chắn muốn XÓA đội "${teamName}"?\n\n` +
-          "Dữ liệu đội sẽ bị xóa hoàn toàn.\n" +
-          "Đội có thể nhập lại và chơi từ đầu."
-        );
-
-        if (!ok) return;
-
-        try {
-
-          await deleteDoc(
-            doc(db, "teams", id)
-          );
-
-          alert(
-            `Đã xóa đội "${teamName}".`
-          );
-
-        } catch (error) {
-
-          console.error(error);
-
-          alert(
-            "Không thể xóa đội. Kiểm tra Firestore Rules."
-          );
-
-        }
-
-      }
-
-    };
-
-  });
+    );
 
 }
 

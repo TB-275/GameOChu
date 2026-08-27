@@ -23,6 +23,63 @@ input,select{width:100%;border:1px solid var(--line);border-radius:14px;backgrou
 .game-screen{padding:20px}.game-header{width:min(100%,1050px);display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin:0 auto 25px}.team-box,.round-box,.timer-box{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:14px}.team-box span,.round-box span,.timer-box span{display:block;font-size:10px;color:var(--muted);font-weight:800;letter-spacing:1.2px}.team-box strong,.round-box strong,.timer-box strong{display:block;margin-top:5px}.timer-box strong{font-family:Orbitron;font-size:22px;color:#ffdf6b}
 .game-main{width:min(100%,620px)}.round-progress{display:flex;align-items:center;justify-content:center;margin-bottom:22px}.progress-dot{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;border:1px solid var(--line);color:var(--muted);font-weight:800}.progress-dot.active{background:var(--green);color:#03140d;border-color:var(--green)}.progress-dot.done{background:#3970ff;color:white}.progress-line{height:2px;width:60px;background:var(--line)}
 .status-banner{font-size:12px;letter-spacing:1px;color:var(--muted);margin-bottom:18px;font-weight:700}.status-banner.success{color:var(--green)}.status-banner.error{color:#ff9ba4}
+.admin-action-title {
+
+  margin-top: 16px;
+  margin-bottom: 8px;
+
+  font-size: 10px;
+
+  font-weight: 900;
+
+  letter-spacing: 1.5px;
+
+  color: var(--muted);
+
+}
+
+.round-actions {
+
+  display: grid;
+
+  grid-template-columns:
+    repeat(
+      2,
+      1fr
+    );
+
+  gap: 7px;
+
+}
+
+.round-actions button {
+
+  min-height: 38px;
+
+}
+
+.delete-team-btn {
+
+  background:
+    rgba(
+      240,
+      92,
+      103,
+      .15
+    ) !important;
+
+  border-color:
+    rgba(
+      240,
+      92,
+      103,
+      .4
+    ) !important;
+
+  color:
+    #ff9ba4 !important;
+
+}
 .board {
   display: flex;
   flex-direction: column;

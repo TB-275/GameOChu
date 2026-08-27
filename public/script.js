@@ -16,10 +16,199 @@ import {
   setDoc,
   getDoc,
   updateDoc,
-  serverTimestamp
+  serverTimestamp,
+  onSnapshot
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
+function listenAdminActions() {
 
+  if (!uid) return;
+
+
+  onSnapshot(
+
+    doc(
+      db,
+      "teams",
+      uid
+    ),
+
+    snapshot => {
+
+      if (
+        !snapshot.exists()
+      ) {
+
+        /*
+          Admin đã xóa đội.
+          Xóa dữ liệu trên máy người chơi.
+        */
+
+        localStorage.removeItem(
+          "aiWordleUid"
+        );
+
+        localStorage.removeItem(
+          "aiWordleTeamName"
+        );
+
+        localStorage.removeItem(
+          "aiWordleState"
+        );
+
+        location.reload();
+
+        return;
+
+      }
+
+
+      const data =
+        snapshot.data();
+
+
+      /* ============================
+         RESET THEO LẦN
+      ============================ */
+
+      if (
+        data.adminAction ===
+        "reset"
+      ) {
+
+        const targetRound =
+          Number(
+            data.adminResetRound
+          );
+
+        if (
+          targetRound >= 1 &&
+          targetRound <= 4
+        ) {
+
+          /*
+            Chỉ thực hiện nếu lần hiện tại
+            khác lần BTC yêu cầu.
+          */
+
+          if (
+            !state ||
+            state.currentRound !== targetRound
+          ) {
+
+            clearInterval(
+              timerInterval
+            );
+
+
+            state = {
+
+              currentRound:
+                targetRound,
+
+              selectedQuestion:
+                null,
+
+              guessRow:
+                0,
+
+              status:
+                "playing",
+
+              roundDeadline:
+                null,
+
+              lockedRounds:
+                [],
+
+              round4LockedQuestions:
+                []
+
+            };
+
+
+            saveState();
+
+
+            alert(
+              `BTC đã reset đội về Lần ${targetRound}.`
+            );
+
+
+            location.reload();
+
+          }
+
+        }
+
+      }
+
+
+      /* ============================
+         MỞ KHÓA THEO LẦN
+      ============================ */
+
+      if (
+        data.adminAction ===
+        "unlock"
+      ) {
+
+        const targetRound =
+          Number(
+            data.adminUnlockRound
+          );
+
+
+        if (
+          targetRound >= 1 &&
+          targetRound <= 4
+        ) {
+
+          if (
+            !state ||
+            state.currentRound !== targetRound ||
+            state.status === "locked"
+          ) {
+
+            clearInterval(
+              timerInterval
+            );
+
+
+            state.currentRound =
+              targetRound;
+
+            state.status =
+              "playing";
+
+            state.locked =
+              false;
+
+            state.roundDeadline =
+              null;
+
+
+            saveState();
+
+
+            alert(
+              `BTC đã mở khóa Lần ${targetRound}.`
+            );
+
+
+            location.reload();
+
+          }
+
+        }
+
+      }
+
+    }
+
+  );
+
+}
 /* =====================================================
    FIREBASE
 ===================================================== */
@@ -1306,6 +1495,18 @@ function colorGuess(
   answer
 ) {
 
+  guess =
+    normalizeWord(
+      guess
+    );
+
+  answer =
+    normalizeWord(
+      answer
+    );
+
+  // Kết quả luôn có số lượng phần tử
+  // bằng đúng số ký tự của đáp án
   const result =
     Array(
       answer.length
@@ -1314,14 +1515,34 @@ function colorGuess(
     );
 
 
-  const remaining =
-    answer.split("");
+  /* =====================================
+     ĐẾM SỐ LẦN XUẤT HIỆN CỦA TỪNG KÝ TỰ
+  ===================================== */
+
+  const letterCount =
+    {};
+
+  for (
+    const letter of answer
+  ) {
+
+    letterCount[letter] =
+      (
+        letterCount[letter] ||
+        0
+      ) + 1;
+
+  }
 
 
-  /*
-     KIỂM TRA
-     ĐÚNG CHỮ ĐÚNG VỊ TRÍ
-  */
+  /* =====================================
+     BƯỚC 1
+
+     ĐÚNG KÝ TỰ
+     + ĐÚNG VỊ TRÍ
+
+     MÀU XANH
+  ===================================== */
 
   for (
     let i = 0;
@@ -1337,19 +1558,23 @@ function colorGuess(
       result[i] =
         "correct";
 
-
-      remaining[i] =
-        null;
+      letterCount[
+        guess[i]
+      ]--;
 
     }
 
   }
 
 
-  /*
-     KIỂM TRA
-     ĐÚNG CHỮ SAI VỊ TRÍ
-  */
+  /* =====================================
+     BƯỚC 2
+
+     ĐÚNG KÝ TỰ
+     NHƯNG SAI VỊ TRÍ
+
+     MÀU VÀNG
+  ===================================== */
 
   for (
     let i = 0;
@@ -1357,28 +1582,32 @@ function colorGuess(
     i++
   ) {
 
+    // Nếu đã xanh thì bỏ qua
     if (
       result[i] ===
       "correct"
     ) {
+
       continue;
+
     }
 
 
-    const index =
-      remaining.indexOf(
-        guess[i]
-      );
+    const letter =
+      guess[i];
 
 
-    if (index !== -1) {
+    if (
+      letter &&
+      letterCount[letter] > 0
+    ) {
 
       result[i] =
         "present";
 
-
-      remaining[index] =
-        null;
+      letterCount[
+        letter
+      ]--;
 
     }
 
@@ -1388,7 +1617,6 @@ function colorGuess(
   return result;
 
 }
-
 
 /* =====================================================
    SUBMIT GUESS
@@ -2492,4 +2720,4 @@ if (adminCommandBtn) {
 
     };
 
-}
+}x
