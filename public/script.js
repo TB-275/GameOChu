@@ -229,7 +229,7 @@ let timerInterval = null;
 let busy = false;
 
 let authReady = false;
-
+let isJoining = false;
 
 
 /* =====================================================
@@ -1004,7 +1004,24 @@ async function joinGame() {
   }
 
 
-  joinBtn.disabled = true;
+  /*
+    Chống bấm liên tục
+  */
+
+  if (isJoining) {
+
+    return;
+
+  }
+
+
+  isJoining =
+    true;
+
+
+  joinBtn.disabled =
+    true;
+
 
   joinMessage.textContent =
     "Đang khởi tạo đội chơi...";
@@ -1015,6 +1032,11 @@ async function joinGame() {
     let user =
       auth.currentUser;
 
+
+    /*
+      Nếu chưa có Anonymous User
+      thì tạo mới.
+    */
 
     if (!user) {
 
@@ -1029,36 +1051,57 @@ async function joinGame() {
     }
 
 
+    /*
+      Lấy UID thật của Firebase
+    */
+
     uid =
       user.uid;
+
 
     teamName =
       name;
 
 
+    /*
+      Khởi tạo trạng thái game
+    */
+
     state = {
 
-      currentRound: 0,
+      currentRound:
+        0,
 
-      selectedQuestion: null,
+      selectedQuestion:
+        null,
 
-      guessRow: 0,
+      guessRow:
+        0,
 
-      status: "playing",
+      status:
+        "playing",
 
-      lockedRounds: [],
+      lockedRounds:
+        [],
 
-      round4LockedQuestions: [],
+      round4LockedQuestions:
+        [],
 
-      roundDeadline: null
+      roundDeadline:
+        null
 
     };
 
+
+    /*
+      Lưu Local Storage
+    */
 
     localStorage.setItem(
       "aiWordleUid",
       uid
     );
+
 
     localStorage.setItem(
       "aiWordleTeamName",
@@ -1068,6 +1111,10 @@ async function joinGame() {
 
     saveState();
 
+
+    /*
+      Tạo document đội trên Firestore
+    */
 
     await setDoc(
 
@@ -1079,7 +1126,8 @@ async function joinGame() {
 
       {
 
-        teamName,
+        teamName:
+          teamName,
 
         status:
           "playing",
@@ -1099,6 +1147,9 @@ async function joinGame() {
         round4LockedQuestions:
           [],
 
+        roundDeadline:
+          null,
+
         adminAction:
           null,
 
@@ -1114,34 +1165,98 @@ async function joinGame() {
         lastActive:
           serverTimestamp()
 
+      },
+
+      {
+        merge:
+          true
       }
 
     );
 
 
+    /*
+      Document đã tạo thành công.
+
+      Bây giờ mới cho phép
+      hệ thống restore / realtime hoạt động.
+    */
+
+    isJoining =
+      false;
+
+
+    /*
+      Bật theo dõi Admin
+    */
+
     listenAdminActions();
 
 
+    /*
+      Chuyển sang chọn Lần 1-4
+    */
+
     showRoundSelection();
+
+
+    joinMessage.textContent =
+      "";
+
 
   }
 
   catch (error) {
 
     console.error(
+      "LỖI KHỞI TẠO ĐỘI:",
       error
     );
 
-    joinMessage.textContent =
-      "Không thể kết nối Firebase. Kiểm tra Authentication và Firestore Rules.";
+
+    /*
+      Hiển thị lỗi thật
+      để biết Firebase đang lỗi gì
+    */
+
+    if (
+      error.code ===
+      "auth/operation-not-allowed"
+    ) {
+
+      joinMessage.textContent =
+        "Firebase chưa bật Anonymous Authentication.";
+
+    }
+
+    else if (
+      error.code ===
+      "permission-denied"
+    ) {
+
+      joinMessage.textContent =
+        "Firestore Rules đang chặn quyền tạo đội.";
+
+    }
+
+    else {
+
+      joinMessage.textContent =
+        `Không thể khởi tạo đội: ${error.message}`;
+
+    }
+
 
     joinBtn.disabled =
+      false;
+
+
+    isJoining =
       false;
 
   }
 
 }
-
 
 /* =====================================================
    HIỂN THỊ 4 LẦN
@@ -2922,9 +3037,33 @@ onAuthStateChanged(
 
   async user => {
 
+    /*
+      Firebase Authentication đã sẵn sàng
+    */
+
     authReady =
       true;
 
+
+    /*
+      Nếu đang trong quá trình
+      tạo đội mới bằng Anonymous Auth
+      thì KHÔNG restore game.
+
+      Nếu không, Auth callback có thể chạy
+      trước khi setDoc() tạo đội trên Firestore.
+    */
+
+    if (isJoining) {
+
+      return;
+
+    }
+
+
+    /*
+      Chưa đăng nhập
+    */
 
     if (!user) {
 
@@ -2937,21 +3076,78 @@ onAuthStateChanged(
     }
 
 
+    /*
+      Có user Firebase nhưng UID Local
+      không khớp.
+
+      Trường hợp Admin đã xóa đội
+      hoặc Local Storage cũ.
+    */
+
     if (
-
       uid &&
-
-      teamName &&
-
-      state
-
+      uid !== user.uid
     ) {
+
+      clearLocalGame();
+
+      showScreen(
+        joinScreen
+      );
+
+      return;
+
+    }
+
+
+    /*
+      Chưa có game Local
+      thì chỉ hiện màn nhập tên.
+
+      Không tự xóa Anonymous User.
+    */
+
+    if (
+      !uid ||
+      !teamName ||
+      !state
+    ) {
+
+      showScreen(
+        joinScreen
+      );
+
+      return;
+
+    }
+
+
+    /*
+      Đảm bảo UID đang sử dụng
+      đúng với Firebase Auth hiện tại
+    */
+
+    uid =
+      user.uid;
+
+
+    /*
+      Khôi phục game cũ
+    */
+
+    try {
 
       await restoreGame();
 
     }
 
-    else {
+    catch (error) {
+
+      console.error(
+        "Lỗi khôi phục game:",
+        error
+      );
+
 
       showScreen(
         joinScreen
@@ -2962,7 +3158,6 @@ onAuthStateChanged(
   }
 
 );
-
 
 /* =====================================================
    EVENTS

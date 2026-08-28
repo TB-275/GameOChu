@@ -8,32 +8,60 @@ service cloud.firestore {
 
       return request.auth != null
         && request.auth.token.email != null
-        && request.auth.token.email == "thaibaoh2002@gmail.com";
+        && request.auth.token.email
+           == "thaibaoh2002@gmail.com";
 
     }
 
 
     match /teams/{teamId} {
 
-      allow create: if request.auth != null
-                    && request.auth.uid == teamId;
+      /*
+        Đội tạo document của chính mình
+      */
+
+      allow create:
+
+        if request.auth != null
+        && request.auth.uid == teamId;
 
 
-      allow read: if request.auth != null
-                  && (
-                    request.auth.uid == teamId
-                    || isAdmin()
-                  );
+      /*
+        Đội được đọc document của chính mình.
+
+        Admin đọc được tất cả đội.
+      */
+
+      allow read:
+
+        if (
+          request.auth != null
+          && request.auth.uid == teamId
+        )
+        || isAdmin();
 
 
-      allow update: if request.auth != null
-                    && (
-                      request.auth.uid == teamId
-                      || isAdmin()
-                    );
+      /*
+        Đội cập nhật dữ liệu của chính mình.
+        Admin cập nhật mọi đội.
+      */
+
+      allow update:
+
+        if (
+          request.auth != null
+          && request.auth.uid == teamId
+        )
+        || isAdmin();
 
 
-      allow delete: if isAdmin();
+      /*
+        Chỉ Admin được xóa đội
+      */
+
+      allow delete:
+
+        if isAdmin();
 
     }
 
