@@ -33,24 +33,25 @@ const db = getFirestore(app);
 
 
 /* =====================================================
-   DỮ LIỆU GAME
-
-   QUAN TRỌNG:
-
-   currentRound trong GAME:
-
-   0 = Lần 1
-   1 = Lần 2
-   2 = Lần 3
-   3 = Lần 4
-
-   Firebase lưu:
-
-   1 = Lần 1
-   2 = Lần 2
-   3 = Lần 3
-   4 = Lần 4
+   CẤU HÌNH GAME
 ===================================================== */
+
+/*
+  SỐ HÀNG ĐOÁN
+
+  10 hàng
+*/
+const MAX_ATTEMPTS = 10;
+
+
+/*
+  4 LẦN THỬ THÁCH
+
+  Lần 1: 3 phút
+  Lần 2: 5 phút
+  Lần 3: 7 phút
+  Lần 4: 10 phút
+*/
 
 const ROUNDS = [
 
@@ -201,7 +202,6 @@ let state =
     localStorage.getItem("aiWordleState") || "null"
   );
 
-
 let currentInput = "";
 
 let timerInterval = null;
@@ -264,6 +264,8 @@ function clearLocalGame() {
 
   currentInput = "";
 
+  busy = false;
+
   clearInterval(
     timerInterval
   );
@@ -305,10 +307,15 @@ function showScreen(screen) {
   const screens = [
 
     joinScreen,
+
     roundSelectScreen,
+
     questionSelectScreen,
+
     gameScreen,
+
     transitionScreen,
+
     finishScreen
 
   ];
@@ -337,7 +344,7 @@ function showScreen(screen) {
 
 
 /* =====================================================
-   FIREBASE SAVE
+   LƯU FIREBASE
 ===================================================== */
 
 async function saveTeam(extra = {}) {
@@ -355,18 +362,20 @@ async function saveTeam(extra = {}) {
         status:
           state.status || "playing",
 
-        /*
-          Firebase hiển thị 1 - 4
-        */
-
         currentRound:
           state.currentRound + 1,
 
         currentQuestion:
+
           state.selectedQuestion !== null &&
           state.selectedQuestion !== undefined
+
             ? state.selectedQuestion + 1
+
             : null,
+
+        currentAttempt:
+          state.guessRow + 1,
 
         lockedRounds:
           state.lockedRounds || [],
@@ -382,7 +391,9 @@ async function saveTeam(extra = {}) {
       }
     );
 
-  } catch (error) {
+  }
+
+  catch (error) {
 
     console.error(
       "Lỗi lưu Firebase:",
@@ -468,63 +479,41 @@ function listenAdminActions() {
             );
 
 
-            /*
-              Chỉ xử lý khi Firebase
-              yêu cầu một vòng khác
-              hoặc state đang không đúng.
-            */
+            state = {
 
-            if (
-              !state ||
-              state.currentRound !== targetRound ||
-              state.status === "finished"
-            ) {
+              currentRound:
+                targetRound,
 
-              state = {
+              selectedQuestion:
+                null,
 
-                currentRound:
-                  targetRound,
+              guessRow:
+                0,
 
-                selectedQuestion:
-                  null,
+              status:
+                "playing",
 
-                guessRow:
-                  0,
+              roundDeadline:
+                null,
 
-                status:
-                  "playing",
+              lockedRounds:
+                [],
 
-                roundDeadline:
-                  null,
+              round4LockedQuestions:
+                []
 
-                /*
-                  RESET TOÀN BỘ KHÓA
-                */
-
-                lockedRounds:
-                  [],
-
-                round4LockedQuestions:
-                  []
-
-              };
+            };
 
 
-              currentInput = "";
+            currentInput = "";
 
-              busy = false;
-
-              saveState();
+            busy = false;
 
 
-              alert(
-                `BTC đã reset đội về Lần ${targetRoundNumber}.`
-              );
+            saveState();
 
 
-              location.reload();
-
-            }
+            location.reload();
 
           }
 
@@ -554,24 +543,13 @@ function listenAdminActions() {
               targetRoundNumber - 1;
 
 
-            if (!state) {
-
-              return;
-
-            }
-
-
             let lockedRounds =
               Array.isArray(
-                state.lockedRounds
+                state?.lockedRounds
               )
                 ? [...state.lockedRounds]
                 : [];
 
-
-            /*
-              XÓA VÒNG KHỎI DANH SÁCH KHÓA
-            */
 
             lockedRounds =
               lockedRounds.filter(
@@ -580,34 +558,57 @@ function listenAdminActions() {
               );
 
 
-            /*
-              Chuyển game tới vòng
-              BTC vừa mở khóa
-            */
+            if (!state) {
 
-            state.currentRound =
-              targetRound;
+              state = {
 
-            state.selectedQuestion =
-              null;
+                currentRound:
+                  targetRound,
 
-            state.guessRow =
-              0;
+                selectedQuestion:
+                  null,
 
-            state.status =
-              "playing";
+                guessRow:
+                  0,
 
-            state.roundDeadline =
-              null;
+                status:
+                  "playing",
 
-            state.lockedRounds =
-              lockedRounds;
+                roundDeadline:
+                  null,
 
+                lockedRounds:
+                  lockedRounds,
 
-            /*
-              Nếu mở Lần 4
-              cho phép chọn lại câu.
-            */
+                round4LockedQuestions:
+                  []
+
+              };
+
+            }
+
+            else {
+
+              state.currentRound =
+                targetRound;
+
+              state.selectedQuestion =
+                null;
+
+              state.guessRow =
+                0;
+
+              state.status =
+                "playing";
+
+              state.roundDeadline =
+                null;
+
+              state.lockedRounds =
+                lockedRounds;
+
+            }
+
 
             if (
               targetRound === 3
@@ -630,11 +631,6 @@ function listenAdminActions() {
 
 
             saveState();
-
-
-            alert(
-              `BTC đã mở khóa Lần ${targetRoundNumber}.`
-            );
 
 
             location.reload();
@@ -680,8 +676,7 @@ async function joinGame() {
   }
 
 
-  joinBtn.disabled =
-    true;
+  joinBtn.disabled = true;
 
   joinMessage.textContent =
     "Đang khởi tạo đội chơi...";
@@ -737,7 +732,6 @@ async function joinGame() {
       uid
     );
 
-
     localStorage.setItem(
       "aiWordleTeamName",
       teamName
@@ -767,6 +761,9 @@ async function joinGame() {
 
         currentQuestion:
           null,
+
+        currentAttempt:
+          1,
 
         lockedRounds:
           [],
@@ -799,17 +796,16 @@ async function joinGame() {
 
     showRoundSelection();
 
+  }
 
-  } catch (error) {
+  catch (error) {
 
     console.error(
       error
     );
 
-
     joinMessage.textContent =
       "Không thể kết nối Firebase. Kiểm tra Authentication và Firestore Rules.";
-
 
     joinBtn.disabled =
       false;
@@ -973,6 +969,7 @@ function showRoundSelection() {
       );
 
     }
+
   );
 
 
@@ -1011,20 +1008,12 @@ function showQuestionSelection(
     ];
 
 
-  if (questionRoundLabel) {
-
-    questionRoundLabel.textContent =
-      `LẦN ${roundIndex + 1}`;
-
-  }
+  questionRoundLabel.textContent =
+    `LẦN ${roundIndex + 1}`;
 
 
-  if (questionTime) {
-
-    questionTime.textContent =
-      `THỜI GIAN: ${formatTime(round.seconds)}`;
-
-  }
+  questionTime.textContent =
+    `THỜI GIAN: ${formatTime(round.seconds)}`;
 
 
   questionList.innerHTML =
@@ -1043,13 +1032,6 @@ function showQuestionSelection(
       card.className =
         "question-card";
 
-
-      /*
-        LẦN 4:
-
-        Chỉ khóa câu
-        đã thất bại
-      */
 
       const isLocked =
 
@@ -1080,11 +1062,13 @@ function showQuestionSelection(
         </strong>
 
         <span>
+
           ${
             isLocked
               ? "ĐÃ KHÓA"
               : "SẴN SÀNG"
           }
+
         </span>
 
       `;
@@ -1115,6 +1099,7 @@ function showQuestionSelection(
       );
 
     }
+
   );
 
 
@@ -1227,20 +1212,12 @@ function startQuestion(
   saveState();
 
 
-  if (teamDisplay) {
-
-    teamDisplay.textContent =
-      teamName;
-
-  }
+  teamDisplay.textContent =
+    teamName;
 
 
-  if (roundLabel) {
-
-    roundLabel.textContent =
-      `LẦN ${roundIndex + 1}`;
-
-  }
+  roundLabel.textContent =
+    `LẦN ${roundIndex + 1}`;
 
 
   if (roundInfo) {
@@ -1263,7 +1240,7 @@ function startQuestion(
 
 
   statusBanner.textContent =
-    "HÃY DỰ ĐOÁN TỪ KHÓA";
+    `HÃY DỰ ĐOÁN TỪ KHÓA - BẠN CÓ ${MAX_ATTEMPTS} LƯỢT`;
 
 
   statusBanner.className =
@@ -1370,7 +1347,6 @@ function startTimer() {
         timerInterval
       );
 
-
       handleFailure();
 
     }
@@ -1391,44 +1367,10 @@ function startTimer() {
 
 
 /* =====================================================
-   BOARD TỰ ĐỘNG THEO ĐỘ DÀI ĐÁP ÁN
+   BOARD
+   TỰ ĐỘNG THEO ĐỘ DÀI ĐÁP ÁN
+   10 HÀNG
 ===================================================== */
-
-function getTileSize(
-  wordLength
-) {
-
-  if (
-    wordLength <= 8
-  ) {
-
-    return 56;
-
-  }
-
-
-  if (
-    wordLength <= 12
-  ) {
-
-    return 46;
-
-  }
-
-
-  if (
-    wordLength <= 16
-  ) {
-
-    return 40;
-
-  }
-
-
-  return 34;
-
-}
-
 
 function buildBoard() {
 
@@ -1444,33 +1386,31 @@ function buildBoard() {
     "";
 
 
-  if (
-    !wordLength
-  ) {
+  if (!wordLength) {
 
     return;
 
   }
 
 
-  const tileSize =
-    getTileSize(
-      wordLength
-    );
-
-
   /*
-    Lưu độ dài để CSS
-    hỗ trợ responsive
+    Lưu độ dài đáp án.
+
+    CSS sẽ tự điều chỉnh kích thước
+    theo 5 -> 20 ký tự.
   */
 
   board.dataset.length =
     wordLength;
 
 
+  /*
+    10 HÀNG DỰ ĐOÁN
+  */
+
   for (
     let rowIndex = 0;
-    rowIndex < 6;
+    rowIndex < MAX_ATTEMPTS;
     rowIndex++
   ) {
 
@@ -1489,12 +1429,18 @@ function buildBoard() {
 
 
     /*
-      Mỗi ô có kích thước
-      theo độ dài đáp án.
+      minmax(0, 1fr)
+
+      Rất quan trọng:
+
+      Giúp các ô tự co lại
+      để vừa chiều rộng điện thoại.
+
+      Không tạo thanh kéo ngang.
     */
 
     row.style.gridTemplateColumns =
-      `repeat(${wordLength}, ${tileSize}px)`;
+      `repeat(${wordLength}, minmax(0, 1fr))`;
 
 
     for (
@@ -1554,15 +1500,17 @@ function renderInput() {
   [...row.children].forEach(
     (tile, index) => {
 
-      tile.textContent =
+      const letter =
         currentInput[index] || "";
+
+
+      tile.textContent =
+        letter;
 
 
       tile.classList.toggle(
         "filled",
-        Boolean(
-          currentInput[index]
-        )
+        Boolean(letter)
       );
 
     }
@@ -1590,7 +1538,9 @@ function clearKeyboard() {
         button.classList.remove(
 
           "correct",
+
           "present",
+
           "absent"
 
         );
@@ -1659,7 +1609,9 @@ function updateKeyboard(
         button.classList.remove(
 
           "absent",
+
           "present",
+
           "correct"
 
         );
@@ -1701,41 +1653,24 @@ function colorGuess(
   const result =
     Array(
       answer.length
-    )
-      .fill(
-        "absent"
-      );
+    ).fill(
+      "absent"
+    );
 
 
-  const letterCount =
-    {};
+  const answerLetters =
+    answer.split("");
 
 
-  /*
-    Đếm ký tự đáp án
-  */
-
-  for (
-    const letter of answer
-  ) {
-
-    letterCount[
-      letter
-    ] =
-      (
-        letterCount[
-          letter
-        ] || 0
-      ) + 1;
-
-  }
+  const guessLetters =
+    guess.split("");
 
 
   /*
     BƯỚC 1
 
     ĐÚNG KÝ TỰ
-    + ĐÚNG VỊ TRÍ
+    ĐÚNG VỊ TRÍ
   */
 
   for (
@@ -1745,17 +1680,20 @@ function colorGuess(
   ) {
 
     if (
-      guess[i] ===
-      answer[i]
+      guessLetters[i] ===
+      answerLetters[i]
     ) {
 
       result[i] =
         "correct";
 
 
-      letterCount[
-        guess[i]
-      ]--;
+      answerLetters[i] =
+        null;
+
+
+      guessLetters[i] =
+        null;
 
     }
 
@@ -1766,7 +1704,7 @@ function colorGuess(
     BƯỚC 2
 
     ĐÚNG KÝ TỰ
-    NHƯNG SAI VỊ TRÍ
+    SAI VỊ TRÍ
   */
 
   for (
@@ -1776,8 +1714,7 @@ function colorGuess(
   ) {
 
     if (
-      result[i] ===
-      "correct"
+      guessLetters[i] === null
     ) {
 
       continue;
@@ -1785,24 +1722,24 @@ function colorGuess(
     }
 
 
-    const letter =
-      guess[i];
+    const foundIndex =
+      answerLetters.indexOf(
+        guessLetters[i]
+      );
 
 
     if (
-      letter &&
-      letterCount[
-        letter
-      ] > 0
+      foundIndex !== -1
     ) {
 
       result[i] =
         "present";
 
 
-      letterCount[
-        letter
-      ]--;
+      answerLetters[
+        foundIndex
+      ] =
+        null;
 
     }
 
@@ -1840,9 +1777,7 @@ function submitGuess() {
     getCurrentAnswer();
 
 
-  if (
-    !answer
-  ) {
+  if (!answer) {
 
     return;
 
@@ -1907,12 +1842,14 @@ function submitGuess() {
     [...row.children];
 
 
+  /*
+    Luôn hiển thị chữ
+    và đổi màu trực tiếp
+    trên từng ô.
+  */
+
   tiles.forEach(
     (tile, index) => {
-
-      /*
-        Luôn hiện chữ
-      */
 
       tile.textContent =
         guess[index] || "";
@@ -1921,8 +1858,11 @@ function submitGuess() {
       tile.classList.remove(
 
         "filled",
+
         "correct",
+
         "present",
+
         "absent"
 
       );
@@ -1934,42 +1874,28 @@ function submitGuess() {
 
 
       setTimeout(
-        () => {
 
-          /*
-            XÓA CLASS CŨ
-          */
+        () => {
 
           tile.classList.remove(
 
             "correct",
+
             "present",
+
             "absent"
 
           );
 
-
-          /*
-            THÊM MÀU
-          */
 
           tile.classList.add(
             colors[index]
           );
 
 
-          /*
-            Backup để CSS
-            luôn hiển thị màu
-          */
-
           tile.dataset.result =
             colors[index];
 
-
-          /*
-            Ô cuối
-          */
 
           if (
             index ===
@@ -2007,11 +1933,12 @@ function submitGuess() {
 
         },
 
-        index * 100
+        index * 70
 
       );
 
     }
+
   );
 
 }
@@ -2023,8 +1950,14 @@ function submitGuess() {
 
 function handleWrongGuess() {
 
+  /*
+    Nếu đã dùng hết
+    10 hàng dự đoán
+  */
+
   if (
-    state.guessRow >= 5
+    state.guessRow >=
+    MAX_ATTEMPTS - 1
   ) {
 
     handleFailure();
@@ -2043,6 +1976,14 @@ function handleWrongGuess() {
 
   busy =
     false;
+
+
+  statusBanner.textContent =
+    `LƯỢT ${state.guessRow + 1}/${MAX_ATTEMPTS}`;
+
+
+  statusBanner.className =
+    "status-banner";
 
 
   saveState();
@@ -2127,9 +2068,7 @@ function handleSuccess() {
 
 function handleFailure() {
 
-  if (
-    !state
-  ) {
+  if (!state) {
 
     return;
 
@@ -2158,10 +2097,10 @@ function handleFailure() {
 
 
   /*
-    LẦN 1 → 3
+    LẦN 1 -> 3
 
-    Khóa lần hiện tại
-    rồi chuyển lần tiếp theo.
+    Khóa lần hiện tại.
+    Chuyển sang lần tiếp theo.
   */
 
   if (
@@ -2257,8 +2196,9 @@ function handleFailure() {
   /*
     LẦN 4
 
-    Chỉ khóa câu
-    đang chơi.
+    KHÔNG KHÓA TOÀN BỘ LẦN 4.
+
+    Chỉ khóa câu vừa chơi.
   */
 
   const question =
@@ -2359,8 +2299,11 @@ function continueGame() {
 
 
   if (
+
     state.currentRound === 3 &&
+
     state.selectedQuestion === null
+
   ) {
 
     showQuestionSelection(
@@ -2411,9 +2354,7 @@ function handleKey(key) {
     getCurrentAnswer();
 
 
-  if (
-    !answer
-  ) {
+  if (!answer) {
 
     return;
 
@@ -2515,7 +2456,7 @@ async function restoreGame() {
 
 
     /*
-      Admin đã xóa đội
+      BTC đã xóa đội
     */
 
     if (
@@ -2523,6 +2464,7 @@ async function restoreGame() {
     ) {
 
       clearLocalGame();
+
 
       showScreen(
         joinScreen
@@ -2537,7 +2479,7 @@ async function restoreGame() {
 
 
     /*
-      ĐÃ HOÀN THÀNH
+      Đã hoàn thành
     */
 
     if (
@@ -2623,7 +2565,9 @@ async function restoreGame() {
 
     showRoundSelection();
 
-  } catch (error) {
+  }
+
+  catch (error) {
 
     console.error(
       "Lỗi khôi phục game:",
@@ -2725,6 +2669,10 @@ teamNameInput.addEventListener(
 );
 
 
+/* =====================================================
+   BÀN PHÍM GAME TRÊN MÀN HÌNH
+===================================================== */
+
 if (keyboard) {
 
   keyboard.addEventListener(
@@ -2752,9 +2700,9 @@ if (keyboard) {
 }
 
 
-/*
-  Bàn phím máy tính
-*/
+/* =====================================================
+   BÀN PHÍM MÁY TÍNH
+===================================================== */
 
 document.addEventListener(
 
@@ -2857,6 +2805,7 @@ if (backRoundBtn) {
 
 /* =====================================================
    ADMIN MODAL
+
    CLICK TIÊU ĐỀ 5 LẦN
 ===================================================== */
 
@@ -3008,13 +2957,6 @@ if (adminCommandBtn) {
       }
 
 
-      /*
-        reset1 = index 0
-        reset2 = index 1
-        reset3 = index 2
-        reset4 = index 3
-      */
-
       const targetRound =
         Number(
           match[1]
@@ -3042,12 +2984,10 @@ if (adminCommandBtn) {
 
 
       /*
-        RESET TOÀN BỘ KHÓA
+        Reset toàn bộ trạng thái khóa.
 
-        Điều này xử lý lỗi:
-
-        Reset Lần 1
-        nhưng Lần 1 vẫn bị khóa.
+        Ví dụ:
+        reset1 sẽ mở lại Lần 1.
       */
 
       state.lockedRounds =
@@ -3152,9 +3092,11 @@ document.addEventListener(
 
 
     if (
+
       now -
       lastGameTouch <
       280
+
     ) {
 
       event.preventDefault();
