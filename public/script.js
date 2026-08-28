@@ -1,3 +1,11 @@
+let currentTeamData = null;
+
+let gameInitialized = false;
+let handlingRemoteReset = false;
+
+let lastResetVersion = null;
+
+let gameStarted = false;
 import { firebaseConfig } from "./firebase-config.js";
 
 import {
@@ -19,7 +27,19 @@ import {
   serverTimestamp,
   onSnapshot
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+function showScreen(screenId) {
 
+  document.querySelectorAll(".screen").forEach(screen => {
+    screen.classList.remove("active");
+  });
+
+  const target = document.getElementById(screenId);
+
+  if (target) {
+    target.classList.add("active");
+  }
+
+}
 
 /* =====================================================
    FIREBASE
@@ -73,11 +93,11 @@ const ROUNDS = [
     seconds: 300,
 
     words: [
-      "ROBOT",
-      "VOICE",
-      "IMAGE",
-      "AUDIO",
-      "SMART"
+      "DANHTHUCTIEMNANG",
+      "TRITUETOITHUONG",
+      "BONAOTUONGLAI",
+      "KYNGUYENTRITUE",
+      "TUDUYNHANTAO"
     ]
   },
 
@@ -86,11 +106,11 @@ const ROUNDS = [
     seconds: 420,
 
     words: [
-      "LEARNING",
-      "TRAINING",
-      "NEURAL",
-      "LOGIC",
-      "CHIP"
+      "KIENTAOTUONGLAI",
+      "VUOTQUAGIOIHAN",
+      "TRITHUCVOHAN",
+      "KHOTRITHUCSO",
+      "DINHCAOTRITHUC"
     ]
   },
 
@@ -99,11 +119,11 @@ const ROUNDS = [
     seconds: 600,
 
     words: [
-      "CHATBOT",
-      "DEEPMIND",
-      "TRITUENHANTAO",
-      "MACHINELEARN",
-      "COMPUTERVISION"
+      "KYNGUYENSO",
+      "TRITUEMAY",
+      "THOIDAIMOI",
+      "KYNGUYENAI",
+      "NAONHANTAO"
     ]
   }
 
@@ -210,7 +230,6 @@ let busy = false;
 
 let authReady = false;
 
-let unsubscribeTeam = null;
 
 
 /* =====================================================
@@ -409,14 +428,111 @@ async function saveTeam(extra = {}) {
    THEO DÕI ADMIN REALTIME
 ===================================================== */
 
+/* =====================================================
+   THEO DÕI ADMIN REALTIME
+===================================================== */
+
+let unsubscribeTeam = null;
+
+/*
+  Chống xử lý cùng một lệnh Admin nhiều lần
+*/
+let lastProcessedAdminActionId = null;
+
+let isHandlingAdminAction = false;
+
+
+function stopGameTimer() {
+
+  if (timerInterval) {
+
+    clearInterval(
+      timerInterval
+    );
+
+    timerInterval = null;
+
+  }
+
+}
+
+
+function resetGameInterface() {
+
+  /*
+    Dừng đồng hồ cũ
+  */
+
+  stopGameTimer();
+
+
+  /*
+    Reset dữ liệu nhập
+  */
+
+  currentInput = "";
+
+  busy = false;
+
+
+  /*
+    Xóa bàn chơi
+  */
+
+  if (board) {
+
+    board.innerHTML = "";
+
+  }
+
+
+  /*
+    Xóa màu bàn phím
+  */
+
+  if (keyboard) {
+
+    keyboard
+      .querySelectorAll(
+        "button"
+      )
+      .forEach(
+        button => {
+
+          button.classList.remove(
+            "correct",
+            "present",
+            "absent"
+          );
+
+        }
+      );
+
+  }
+
+}
+
+
+/* =====================================================
+   LẮNG NGHE DỮ LIỆU ADMIN
+===================================================== */
+
 function listenAdminActions() {
 
-  if (!uid) return;
+  if (!uid) {
 
+    return;
+
+  }
+
+
+  /*
+    Tránh tạo nhiều onSnapshot
+  */
 
   if (unsubscribeTeam) {
 
-    unsubscribeTeam();
+    return;
 
   }
 
@@ -430,17 +546,32 @@ function listenAdminActions() {
         uid
       ),
 
-      snapshot => {
+      async snapshot => {
 
         /*
-          BTC XÓA ĐỘI
+          Đội đã bị Admin xóa
         */
 
-        if (!snapshot.exists()) {
+        if (
+          !snapshot.exists()
+        ) {
+
+          stopGameTimer();
 
           clearLocalGame();
 
-          location.reload();
+          if (unsubscribeTeam) {
+
+            unsubscribeTeam();
+
+            unsubscribeTeam = null;
+
+          }
+
+
+          showScreen(
+            joinScreen
+          );
 
           return;
 
@@ -451,12 +582,61 @@ function listenAdminActions() {
           snapshot.data();
 
 
+        /*
+          Không có lệnh Admin
+        */
+
+        if (
+          !data.adminAction
+        ) {
+
+          return;
+
+        }
+
+
+        /*
+          Tạo ID riêng cho lệnh
+          để không xử lý lại nhiều lần
+        */
+
+        const actionId =
+          `${data.adminAction}-${data.adminResetRound || ""}-${data.adminUnlockRound || ""}`;
+
+
+        if (
+          lastProcessedAdminActionId ===
+          actionId
+        ) {
+
+          return;
+
+        }
+
+
+        if (
+          isHandlingAdminAction
+        ) {
+
+          return;
+
+        }
+
+
+        isHandlingAdminAction =
+          true;
+
+        lastProcessedAdminActionId =
+          actionId;
+
+
         /* ===============================================
            RESET THEO LẦN
         =============================================== */
 
         if (
-          data.adminAction === "reset"
+          data.adminAction ===
+          "reset"
         ) {
 
           const targetRoundNumber =
@@ -465,55 +645,171 @@ function listenAdminActions() {
             );
 
 
+          /*
+            Chỉ nhận lần 1 - 4
+          */
+
           if (
             targetRoundNumber >= 1 &&
             targetRoundNumber <= 4
           ) {
 
-            const targetRound =
-              targetRoundNumber - 1;
-
-
-            clearInterval(
-              timerInterval
+            console.log(
+              "ADMIN RESET ROUND:",
+              targetRoundNumber
             );
 
 
-            state = {
+            /*
+              Dừng game hiện tại
+            */
 
-              currentRound:
-                targetRound,
-
-              selectedQuestion:
-                null,
-
-              guessRow:
-                0,
-
-              status:
-                "playing",
-
-              roundDeadline:
-                null,
-
-              lockedRounds:
-                [],
-
-              round4LockedQuestions:
-                []
-
-            };
+            resetGameInterface();
 
 
-            currentInput = "";
+            /*
+              Reset state
+            */
 
-            busy = false;
+            state.currentRound =
+              targetRoundNumber - 1;
 
+            state.selectedQuestion =
+              null;
+
+            state.guessRow =
+              0;
+
+            state.roundDeadline =
+              null;
+
+            state.status =
+              "playing";
+
+
+            /*
+              MỞ KHÓA ĐÚNG LẦN ĐƯỢC RESET
+
+              Không reset toàn bộ các lần khác
+              để tránh phá tiến trình.
+            */
+
+            if (
+              !Array.isArray(
+                state.lockedRounds
+              )
+            ) {
+
+              state.lockedRounds =
+                [];
+
+            }
+
+
+            /*
+              Xóa khóa của lần đang reset
+            */
+
+            state.lockedRounds =
+              state.lockedRounds.filter(
+                roundIndex =>
+                  Number(
+                    roundIndex
+                  ) !==
+                  targetRoundNumber - 1
+              );
+
+
+            /*
+              Nếu reset lần 4
+              mở lại các câu đã khóa của lần 4
+            */
+
+            if (
+              targetRoundNumber === 4
+            ) {
+
+              state.round4LockedQuestions =
+                [];
+
+            }
+
+
+            /*
+              Lưu local
+            */
 
             saveState();
 
 
-            location.reload();
+            /*
+              Xóa lệnh Admin trên Firestore.
+
+              RẤT QUAN TRỌNG:
+              nếu không xóa, refresh sẽ nhận lại
+              lệnh reset và tiếp tục xử lý.
+            */
+
+            await updateDoc(
+
+              doc(
+                db,
+                "teams",
+                uid
+              ),
+
+              {
+
+                status:
+                  "playing",
+
+                currentRound:
+                  targetRoundNumber,
+
+                selectedQuestion:
+                  null,
+
+                roundDeadline:
+                  null,
+
+                adminAction:
+                  null,
+
+                adminResetRound:
+                  null,
+
+                adminUnlockRound:
+                  null,
+
+                lastActive:
+                  serverTimestamp()
+
+              }
+
+            );
+
+
+            /*
+              Chờ Firestore ổn định
+              rồi chuyển về màn chọn lần
+            */
+
+            setTimeout(
+
+              () => {
+
+                showRoundSelection();
+
+                isHandlingAdminAction =
+                  false;
+
+              },
+
+              300
+
+            );
+
+            return;
 
           }
 
@@ -525,7 +821,8 @@ function listenAdminActions() {
         =============================================== */
 
         if (
-          data.adminAction === "unlock"
+          data.adminAction ===
+          "unlock"
         ) {
 
           const targetRoundNumber =
@@ -539,105 +836,136 @@ function listenAdminActions() {
             targetRoundNumber <= 4
           ) {
 
-            const targetRound =
-              targetRoundNumber - 1;
+            console.log(
+              "ADMIN UNLOCK ROUND:",
+              targetRoundNumber
+            );
 
 
-            let lockedRounds =
-              Array.isArray(
-                state?.lockedRounds
-              )
-                ? [...state.lockedRounds]
-                : [];
-
-
-            lockedRounds =
-              lockedRounds.filter(
-                item =>
-                  Number(item) !== targetRound
-              );
-
-
-            if (!state) {
-
-              state = {
-
-                currentRound:
-                  targetRound,
-
-                selectedQuestion:
-                  null,
-
-                guessRow:
-                  0,
-
-                status:
-                  "playing",
-
-                roundDeadline:
-                  null,
-
-                lockedRounds:
-                  lockedRounds,
-
-                round4LockedQuestions:
-                  []
-
-              };
-
-            }
-
-            else {
-
-              state.currentRound =
-                targetRound;
-
-              state.selectedQuestion =
-                null;
-
-              state.guessRow =
-                0;
-
-              state.status =
-                "playing";
-
-              state.roundDeadline =
-                null;
-
-              state.lockedRounds =
-                lockedRounds;
-
-            }
-
+            /*
+              Nếu chưa có mảng khóa
+            */
 
             if (
-              targetRound === 3
+              !Array.isArray(
+                state.lockedRounds
+              )
             ) {
 
-              state.round4LockedQuestions =
+              state.lockedRounds =
                 [];
 
             }
 
 
-            currentInput = "";
+            /*
+              Mở khóa đúng lần
+            */
 
-            busy = false;
+            state.lockedRounds =
+              state.lockedRounds.filter(
+                roundIndex =>
+                  Number(
+                    roundIndex
+                  ) !==
+                  targetRoundNumber - 1
+              );
 
 
-            clearInterval(
-              timerInterval
-            );
+            /*
+              Nếu mở khóa lần 4
+              không bắt buộc mở toàn bộ câu,
+              giữ lại trạng thái câu.
+            */
+
+            state.currentRound =
+              targetRoundNumber - 1;
+
+            state.status =
+              "playing";
 
 
             saveState();
 
 
-            location.reload();
+            /*
+              Xóa lệnh Admin
+            */
+
+            await updateDoc(
+
+              doc(
+                db,
+                "teams",
+                uid
+              ),
+
+              {
+
+                status:
+                  "playing",
+
+                currentRound:
+                  targetRoundNumber,
+
+                adminAction:
+                  null,
+
+                adminResetRound:
+                  null,
+
+                adminUnlockRound:
+                  null,
+
+                lastActive:
+                  serverTimestamp()
+
+              }
+
+            );
+
+
+            setTimeout(
+
+              () => {
+
+                showRoundSelection();
+
+                isHandlingAdminAction =
+                  false;
+
+              },
+
+              300
+
+            );
+
+            return;
 
           }
 
         }
+
+
+        /*
+          Nếu lệnh không hợp lệ
+          vẫn mở khóa xử lý
+        */
+
+        isHandlingAdminAction =
+          false;
+
+      },
+
+      error => {
+
+        console.error(
+          "Lỗi theo dõi đội:",
+          error
+        );
+
+        isHandlingAdminAction =
+          false;
 
       }
 
@@ -2957,100 +3285,153 @@ if (adminCommandBtn) {
       }
 
 
-      const targetRound =
-        Number(
-          match[1]
-        ) - 1;
+      const targetRoundNumber =
+  Number(
+    match[1]
+  );
+
+const targetRound =
+  targetRoundNumber - 1;
 
 
-      state.currentRound =
-        targetRound;
+/*
+  Dừng đồng hồ hiện tại
+*/
+
+stopGameTimer();
 
 
-      state.selectedQuestion =
-        null;
+/*
+  Reset game đang chơi
+*/
+
+currentInput =
+  "";
+
+busy =
+  false;
 
 
-      state.guessRow =
-        0;
+/*
+  Chuyển đúng lần được reset
+*/
+
+state.currentRound =
+  targetRound;
+
+state.selectedQuestion =
+  null;
+
+state.guessRow =
+  0;
+
+state.status =
+  "playing";
+
+state.roundDeadline =
+  null;
 
 
-      state.status =
-        "playing";
+/*
+  MỞ KHÓA ĐÚNG LẦN ĐANG RESET
+*/
+
+if (
+  !Array.isArray(
+    state.lockedRounds
+  )
+) {
+
+  state.lockedRounds =
+    [];
+
+}
 
 
-      state.roundDeadline =
-        null;
+state.lockedRounds =
+  state.lockedRounds.filter(
+    roundIndex =>
+      Number(
+        roundIndex
+      ) !==
+      targetRound
+  );
 
 
-      /*
-        Reset toàn bộ trạng thái khóa.
+/*
+  Reset câu đã chọn
+*/
 
-        Ví dụ:
-        reset1 sẽ mở lại Lần 1.
-      */
+if (
+  targetRoundNumber === 4
+) {
 
-      state.lockedRounds =
-        [];
+  state.round4LockedQuestions =
+    [];
 
-
-      state.round4LockedQuestions =
-        [];
-
-
-      currentInput =
-        "";
+}
 
 
-      busy =
-        false;
+/*
+  Reset giao diện
+*/
+
+resetGameInterface();
 
 
-      saveState();
+saveState();
 
 
-      await saveTeam({
+await saveTeam({
 
-        status:
-          "playing",
+  status:
+    "playing",
 
-        adminAction:
-          null,
+  currentRound:
+    targetRoundNumber,
 
-        adminResetRound:
-          null,
+  selectedQuestion:
+    null,
 
-        adminUnlockRound:
-          null
+  roundDeadline:
+    null,
 
-      });
+  adminAction:
+    null,
 
+  adminResetRound:
+    null,
 
-      msg.textContent =
-        `Đã reset về Lần ${targetRound + 1}.`;
+  adminUnlockRound:
+    null
 
-
-      setTimeout(
-
-        () => {
-
-          document
-            .getElementById(
-              "adminModal"
-            )
-            .classList.remove(
-              "show"
-            );
+});
 
 
-          showRoundSelection();
+msg.textContent =
+  `Đã reset Lần ${targetRoundNumber} và mở khóa Lần ${targetRoundNumber}.`;
 
-        },
 
-        500
+setTimeout(
 
+  () => {
+
+    document
+      .getElementById(
+        "adminModal"
+      )
+      .classList.remove(
+        "show"
       );
 
+
+    showRoundSelection();
+
+  },
+
+  500
+
+);
     };
 
 }
